@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+// Redirect browsers to the docs
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
+	header('Location: https://docs.totalcms.co/advanced/ai-integration/', true, 302);
+	exit;
+}
+
 use GuzzleHttp\Psr7\ServerRequest;
 use Laminas\HttpHandlerRunner\Emitter\SapiEmitter;
 use Mcp\Server;
