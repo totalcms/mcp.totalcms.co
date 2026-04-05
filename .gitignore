@@ -1,0 +1,4 @@
+/vendor/
+/data/sessions/
+.DS_Store
+.claude
