@@ -90,6 +90,19 @@ $builder->addTool(
 
 $server = $builder->build();
 
+// Log MCP connections (initialize requests only)
+$rawBody = file_get_contents('php://input');
+if ($rawBody !== false && str_contains($rawBody, '"initialize"')) {
+	$payload = json_decode($rawBody, true);
+	$clientInfo = $payload['params']['clientInfo'] ?? [];
+	$logEntry = date('c')
+		. "\t" . ($clientInfo['name'] ?? 'unknown')
+		. "\t" . ($clientInfo['version'] ?? '')
+		. "\t" . ($_SERVER['REMOTE_ADDR'] ?? '')
+		. "\n";
+	file_put_contents(__DIR__ . '/../logs/connections.log', $logEntry, FILE_APPEND | LOCK_EX);
+}
+
 // Create PSR-7 request from PHP globals
 $request = ServerRequest::fromGlobals();
 
