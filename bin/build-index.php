@@ -202,6 +202,17 @@ if (file_exists($settingsFile)) {
 echo "  Schema config options: " . count($schemaConfig) . "\n";
 
 // -------------------------------------------------------
+// Parse CLI commands from cli/commands.md
+// -------------------------------------------------------
+$cliCommands = [];
+$cliFile = $docsDir . '/advanced/cli.md';
+if (file_exists($cliFile)) {
+	$content = file_get_contents($cliFile);
+	$cliCommands = parseCliCommands($content);
+}
+echo "  CLI commands: " . count($cliCommands) . "\n";
+
+// -------------------------------------------------------
 // Build the final index
 // -------------------------------------------------------
 $index = [
@@ -213,6 +224,7 @@ $index = [
 	'field_types'    => $fieldTypes,
 	'api_endpoints'  => $apiEndpoints,
 	'schema_config'  => $schemaConfig,
+	'cli_commands'   => $cliCommands,
 ];
 
 $json = json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -663,4 +675,73 @@ function extractCodeBlocks(string $section): array
 	}
 	// Limit to first 3 examples per entry
 	return array_slice($examples, 0, 3);
+}
+
+/**
+ * Parse CLI commands from cli/commands.md.
+ * Pattern: ### `command:name`
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function parseCliCommands(string $content): array
+{
+	$commands = [];
+	$body = removeFrontmatter($content);
+
+	// Split by H3 headings that contain backtick command names
+	$parts = preg_split('/^###\s+/m', $body);
+
+	foreach ($parts as $part) {
+		$part = trim($part);
+		if ($part === '' || !str_starts_with($part, '`')) {
+			continue;
+		}
+
+		// Extract command name from backticks
+		if (!preg_match('/^`([^`]+)`/', $part, $nameMatch)) {
+			continue;
+		}
+
+		$name = $nameMatch[1];
+
+		// Get description (first paragraph after the heading)
+		$description = extractDescription($part);
+
+		// Extract examples
+		$examples = extractCodeBlocks($part);
+
+		// Extract options table (rows where first column starts with --)
+		$options = [];
+		if (preg_match_all('/\|\s*`(--[^`]+)`\s*\|\s*([^|]+)\|/m', $part, $optMatches, PREG_SET_ORDER)) {
+			foreach ($optMatches as $om) {
+				$options[] = [
+					'name'        => trim($om[1]),
+					'description' => trim($om[2]),
+				];
+			}
+		}
+
+		// Extract arguments table (rows with Required Yes/No column)
+		$arguments = [];
+		if (preg_match_all('/\|\s*`(\w+)`\s*\|\s*(Yes|No)\s*\|\s*([^|]+)\|/m', $part, $argMatches, PREG_SET_ORDER)) {
+			foreach ($argMatches as $am) {
+				$arguments[] = [
+					'name'        => trim($am[1]),
+					'required'    => strtolower(trim($am[2])) === 'yes',
+					'description' => trim($am[3]),
+				];
+			}
+		}
+
+		$commands[] = [
+			'name'        => $name,
+			'description' => $description,
+			'arguments'   => $arguments,
+			'options'     => $options,
+			'examples'    => $examples,
+			'url'         => 'https://docs.totalcms.co/advanced/cli/',
+		];
+	}
+
+	return $commands;
 }

@@ -277,19 +277,48 @@ class DocsTools
 	}
 
 	/**
-	 * Look up a CLI command. Returns the command syntax, flags, and usage examples.
-	 * Note: The Total CMS CLI is currently in development.
+	 * Look up a CLI command. Returns the command syntax, arguments, options, and usage examples.
 	 */
 	#[McpTool(
 		name: 'docs_cli_command',
-		description: 'Look up a Total CMS CLI command. Returns syntax, flags, and usage examples. Note: CLI is currently in development.',
+		description: 'Look up a Total CMS CLI command by name. Returns syntax, arguments, options, and usage examples. Example: docs_cli_command("collection:query")',
 		annotations: new ToolAnnotations(readOnlyHint: true),
 	)]
 	public function cliCommand(string $name): string
 	{
+		$name = strtolower(trim($name));
+
+		// Exact match
+		foreach ($this->index['cli_commands'] ?? [] as $cmd) {
+			if (strtolower($cmd['name']) === $name) {
+				return json_encode($cmd, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Partial match
+		$matches = [];
+		foreach ($this->index['cli_commands'] ?? [] as $cmd) {
+			if (str_contains(strtolower($cmd['name']), $name)) {
+				$matches[] = ['name' => $cmd['name'], 'description' => $cmd['description'] ?? ''];
+			}
+		}
+
+		if (!empty($matches)) {
+			return json_encode([
+				'message' => "No exact match for '{$name}'. Did you mean:",
+				'matches' => $matches,
+			], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+
+		// List all available commands
+		$available = array_map(
+			fn (array $cmd): string => $cmd['name'],
+			$this->index['cli_commands'] ?? []
+		);
+
 		return json_encode([
-			'message' => 'The Total CMS CLI is currently in development. CLI command documentation will be available in a future update.',
-			'query'   => $name,
+			'error'              => "CLI command '{$name}' not found.",
+			'available_commands' => $available,
 		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
 	}
 

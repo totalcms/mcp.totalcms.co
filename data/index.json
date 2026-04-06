@@ -1,6 +1,6 @@
 {
     "version": "1.0.0",
-    "built_at": "2026-04-05T15:51:37+00:00",
+    "built_at": "2026-04-06T21:12:26+00:00",
     "pages": [
         {
             "title": "Sitemap Builder",
@@ -55,6 +55,24 @@
                 "Monitoring and Troubleshooting"
             ],
             "content": "server sizing guide this guide helps you choose the right server resources for running total cms 3. whether you're hosting a single site or managing multiple sites on one server, understanding what drives cpu, memory, and disk usage will help you make informed decisions. quick reference | server size | cpu | ram | storage | best for | |-------------|-----|-----|---------|----------| | starter | 1 core | 1 gb | 10 gb | personal site, low traffic, small content | | small | 1-2 cores | 2 gb | 25 gb | client site, moderate traffic | | medium | 2-4 cores | 4 gb | 50 gb | active site with image processing, multiple sites | | large | 4+ cores | 8+ gb | 100+ gb | high traffic, large collections, many sites | --- cpu: when more cores help each visitor request is handled by a single cpu core. more cores means your server can handle more visitors simultaneously without slowing down. what uses cpu image processing heaviest cpu consumer when a visitor requests a resized, cropped, or watermarked image for the first time, your server does the actual image manipulation in real time. this is the single most cpu-intensive operation in total cms. once processed, the result is cached to disk so subsequent requests for the same image are fast. - resizing a large photo to a thumbnail: moderate cpu - applying an image watermark: high cpu - applying a text watermark: moderate cpu - combined image + text watermark: very high cpu two-pass rendering - format conversion e.g., jpeg to webp : moderate cpu twig template compilation the first time a twig template is loaded, it gets compiled to php. this costs some cpu but only happens once \u2014 after that, the compiled version is cached. if opcache is enabled recommended , the compiled php is cached in memory for even faster loading. collection filtering and search when visitors browse filtered content e.g., blog posts by category, products by price range , total cms filters the collection in memory using php. for small to medium collections under 10,000 objects , this is very fast. for larger collections, filtering takes more cpu time since it scans through all objects. background jobs job queue several operations run as background jobs that consume cpu: - index rebuilding \u2014 when you save an object, total cms rebuilds the collection's search index. for small collections this is instant, but for collections with thousands of objects, rebuilding the index scans every object and can cause noticeable cpu spikes. for collections with 1,000+ objects, enable the queuerebuildonsave collection setting to move index rebuilds to the background job queue instead of blocking the admin interface. - large imports \u2014 importing content via jumpstart or migrating from another cms processes objects one at a time. each object goes through saving, cache invalidation, and index updating. importing hundreds or thousands of objects is cpu-intensive and can take several minutes. - factory data generation \u2014 generating test content with the factory system creates objects with randomized data, which adds image processing on top of the normal save overhead. these jobs run as a single-threaded cli process, so they won't benefit from multiple cores directly \u2014 but having extra cores prevents background jobs from competing with visitor requests. what to expect when adding cores 1 core \u2192 2 cores: the biggest improvement you'll feel. with 1 core, a single image processing request can block all other visitors. with 2 cores, one core can handle image work while the other serves regular page requests. this is the most impactful upgrade for sites that use imageworks. 2 cores \u2192 4 cores: noticeable improvement for sites with moderate traffic or heavy image processing. four simultaneous visitors can each get a fast response. if you're running multiple sites on the same server, this helps prevent one busy site from slowing down the others. 4+ cores: primarily beneficial for high-traffic sites or servers hosting many sites. each additional core adds capacity for one more simultaneous request. cpu tips - install the imagick php extension. total cms uses imagick for image processing when available, falling back to gd if not. imagick is significantly faster than gd, especially for large images. this is one of the easiest performance wins available. - opcache is free performance. it caches compiled php bytecode in memory, eliminating recompilation on every request. most php installations have it enabled by default. - enable queuerebuildonsave for large collections. collections with 1,000+ objects should use this setting to prevent index rebuilds from blocking the admin. the object is immediately visible in the index, and the full rebuild happens in the background. - the job queue runs as a single-threaded cli process. adding more cores won't speed up an individual job, but it prevents jobs from competing with visitor requests. --- ram: when more memory helps memory in total cms serves three main purposes: running php itself, powering the cache system, and handling content operations. how total cms uses memory php request processing every web request needs memory to run. a typical total cms page request uses 20-40 mb of memory. php-fpm the standard way php handles web requests runs multiple worker processes, and each worker needs its own memory allocation. more ram means you can run more workers, which means more simultaneous visitors. a rough formula for php-fpm workers: available workers = total ram - 512 mb for os / 40 mb per worker for example: - 1 gb ram \u2248 12 workers - 2 gb ram \u2248 37 workers - 4 gb ram \u2248 87 workers in practice, you won't need this many workers on most sites. the default php-fpm configuration is fine for most setups. caching the biggest reason to add ram total cms uses a multi-layer cache system. the faster layers live in ram, and giving them more space dramatically improves response times. the cache priority order is: 1. apcu fastest \u2014 lives in php's memory space, no network overhead. stores collection indexes, object data, schema definitions, and api responses. this is the single biggest beneficiary of extra ram. 2. redis fast \u2014 separate memory-based service. good for multi-server setups or when you want cache to survive php restarts. 3. memcached fast \u2014 similar to redis, alternative option. 4. filesystem slowest \u2014 disk-based fallback. always available but much slower than memory-based caches. when data is in apcu, it's served in microseconds. when it falls back to the filesystem, it takes milliseconds \u2014 orders of magnitude slower. more ram for apcu means more of your content stays in the fast cache. what gets cached and for how long: | data | cache duration | why it matters | |------|---------------|----------------| | collection indexes | 1 hour | loaded on almost every page that lists content | | individual objects | 4 hours | loaded when viewing any single content item | | schema definitions | 4-24 hours | loaded on every admin and front-end request | | api responses | 30 minutes | rest api calls cache their results | | twig templates | until changed | compiled php files cached on disk + opcache | | processed images | indefinitely | cached on disk after first generation | large content operations when filtering or sorting large collections, the entire collection index is loaded into memory. for most sites this is negligible, but collections with tens of thousands of objects will use more memory per request. jumpstart imports and exports stream data to avoid loading everything at once, but the job queue process defaults to a 512 mb memory limit for safety. what to expect when adding ram 1 gb \u2192 2 gb: the most impactful upgrade. with 1 gb, there's barely enough room for the os, php workers, and apcu cache. at 2 gb, you can comfortably run 15-20 php-fpm workers and allocate 128-256 mb to apcu. pages that rely on cached content will respond noticeably faster, and the admin interface will feel snappier because schema and collection data stays in cache longer. 2 gb \u2192 4 gb: meaningful improvement for active sites. you can allocate 256-512 mb to apcu, keeping more collection data in fast memory. this is especially noticeable on sites with many collections or large image galleries where there's a lot of metadata to cache. you also have headroom for more php workers to handle traffic spikes. 4 gb \u2192 8 gb: primarily beneficial for servers hosting multiple sites, sites with very large collections 10,000+ objects , or if you're running redis alongside php. at this level, you can give apcu 512 mb-1 gb, run 50+ php workers, and still have comfortable headroom. 8 gb+: for high-traffic servers or those hosting many sites. consider running a dedicated redis instance at this level for cache that persists across php restarts and can be shared between sites. ram tips - increase apcu cache size by setting apc.shm size in your php.ini . the default is often 32 mb, which fills up quickly. set it to at least 128 mb for a single site, or 256-512 mb for multiple sites. - monitor your apcu hit rate in the admin cache manager. if it drops below 80%, your cache is too small and frequently evicting data. increase apc.shm size . - redis and memcached are optional. for a single server running one or two sites, apcu alone with a filesystem fallback is usually sufficient. add redis when you need cache that survives php restarts or when scaling to multiple servers. --- disk space disk usage in total cms comes from three areas: content data json files in the tcms-data directory. text-based content is very compact \u2014 even thousands of blog posts only take a few megabytes. the data itself is rarely a storage concern. uploaded media images, files, and depot uploads are the primary consumers of disk space. a single high-resolution photo can be 5-15 mb. a gallery-heavy site with hundreds of images can easily reach several gigabytes. image cache every unique combination of image + processing parameters size, crop, format, watermark creates a cached file on disk. a single source image displayed at three different sizes creates three cached files. this can grow significantly on image-heavy sites. recommendations: - 10 gb \u2014 small sites with limited media - 25-50 gb \u2014 typical client sites with image galleries - 100+ gb \u2014 media-heavy sites, large depot file repositories, or multiple sites ssd vs hdd: ssd is strongly recommended. total cms reads and writes many small json files, and the image cache benefits greatly from fast random read speeds. the difference is especially noticeable in the admin interface and on pages that load many images. --- running multiple sites on one server each total cms installation runs independently with its own data directory, cache, and configuration. when hosting multiple sites on the same server, resources are shared and you need to plan accordingly. how resources are shared cpu: each site's visitors compete for the same cpu cores. if site a is processing images while site b gets a traffic spike, both slow down. plan for the combined peak load of all sites. ram \u2014 php workers: all sites share the same pool of php-fpm workers unless you configure separate pools per site . each worker handles one request at a time regardless of which site it's serving. ram \u2014 apcu cache: all sites share the same apcu memory space. each site's collection data, schemas, and indexes compete for cache room. with a small apcu allocation, busy sites can evict other sites' cached data, causing cache misses and slower responses. disk: each site has its own tcms-data directory and image cache. disk usage is additive across all sites. multi-site sizing guidelines | sites | cpu | ram | apcu size | storage | |-------|-----|-----|-----------|---------| | 2-3 small sites | 2 cores | 2-4 gb | 256 mb | 25-50 gb | | 3-5 active sites | 4 cores | 4-8 gb | 512 mb | 50-100 gb | | 5-10 sites | 4+ cores | 8-16 gb | 1 gb | 100-200 gb | | 10+ sites | 8+ cores | 16+ gb | 2 gb | 200+ gb | multi-site tips - increase apcu size proportionally. a good starting point is 64-128 mb per site. monitor the hit rate and increase if it drops below 80%. - consider redis for multi-site servers. redis runs as a separate service with its own dedicated memory, making cache behavior more predictable than apcu which is shared across all php processes. - separate php-fpm pools per site if your hosting allows it prevents one busy site from consuming all workers and starving other sites. - stagger maintenance tasks. if multiple sites run jumpstart imports or cache clears simultaneously, they'll compete for cpu and memory. schedule these at different times. - monitor individual sites. each site's admin cache manager shows its own cache hit rates and performance metrics. a drop in one site's hit rate may indicate the shared cache is too small. --- cache configuration tuning your cache settings is one of the most effective ways to improve total cms performance. the admin cache manager shows hit rates and memory usage for each backend \u2014 use it to guide your tuning. apcu settings apcu is the fastest cache layer and the one most worth investing ram into. configure it in your php.ini : ; total memory allocated to apcu ; default is often 32m, which is too small for most total cms sites apc.shm size = 128m ; maximum number of cached entries default 10000 is usually fine apc.entries hint = 10000 ; enable apcu for cli scripts needed for job queue cache access apc.enable cli = 1 recommended apc.shm size by setup: | setup | recommended size | why | |-------|-----------------|-----| | single small site | 64-128 mb | enough for indexes, schemas, and frequently accessed objects | | single active site | 128-256 mb | room for larger collections and more object data in cache | | 2-5 sites on one server | 256-512 mb | all sites share the same apcu pool | | 5-10 sites on one server | 512 mb-1 gb | prevents busy sites from evicting other sites' cached data | | 10+ sites or large collections | 1-2 gb | keeps hit rates high across many sites | how to know if you need more: check the cache manager in the admin. if your apcu hit rate is below 80%, the cache is evicting data too frequently \u2014 increase apc.shm size . the cache manager also shows memory usage percentage; if it stays above 90%, the cache is full and needs more room. redis settings redis is configured in your redis.conf file not in php . total cms connects to redis at 127.0.0.1:6379 by default. maximum memory redis can use if not set, redis will use all available memory maxmemory 256mb what happens when maxmemory is reached allkeys-lru evicts least recently used keys recommended for caching maxmemory-policy allkeys-lru optional: require a password requirepass your-password-here recommended maxmemory by setup: | setup | recommended size | notes | |-------|-----------------|-------| | single site | 128-256 mb | supplements apcu, survives php restarts | | multiple sites | 256-512 mb | shared across all sites on the server | | high traffic | 512 mb-1 gb | keeps more data cached between restarts | when to use redis: - you want cache to persist across php restarts apcu is cleared when php restarts - you're running multiple sites and want more predictable cache behavior - you're planning to scale to multiple servers redis can be shared across servers, apcu cannot when apcu alone is enough: - single server with 1-2 sites - you don't mind cache warming up after php restarts - you'd rather keep things simple memcached settings memcached is an alternative to redis. total cms connects to 127.0.0.1:11211 by default. configure memory allocation when starting memcached: start with 256mb of memory memcached -m 256 most users should choose either redis or memcached, not both. redis is generally recommended for its richer feature set. --- server configuration checklist php extensions required - json \u2014 data storage and api - mbstring \u2014 utf-8 string handling - fileinfo \u2014 file type detection php extensions recommended - imagick \u2014 significantly faster image processing than gd - apcu \u2014 in-memory caching biggest single performance improvement - opcache \u2014 bytecode caching usually enabled by default - intl \u2014 internationalization and date formatting php settings to review ; memory per php process default is often 128m, sufficient for most sites memory limit = 128m ; apcu cache size increase from default 32m apc.shm size = 128m ; single site ; apc.shm size = 256m ; 2-5 sites ; apc.shm size = 512m ; 5+ sites ; opcache usually enabled by default opcache.enable = 1 opcache.memory consumption = 128 ; upload limits adjust based on your media needs upload max filesize = 64m post max size = 64m ; execution time sufficient for most operations max execution time = 30 optional services - redis \u2014 recommended for multi-site or high-traffic setups - memcached \u2014 alternative to redis - cron \u2014 needed if using the job queue for background imports --- monitoring and troubleshooting signs you need more cpu - pages take a long time to load when images are being processed for the first time - the admin becomes sluggish when saving objects in large collections index rebuilding - the server becomes unresponsive during traffic spikes - jumpstart imports or large collection imports take excessively long signs you need more ram - apcu hit rate below 80% check in admin cache manager - php-fpm logs show \"max children reached\" warnings - pages load slowly even after content has been visited before cache eviction signs you need more disk - image cache directories growing faster than expected - upload failures due to insufficient space - slow disk i/o on hdd consider upgrading to ssd emergency cache clearing if your server becomes unresponsive due to cache issues, total cms provides an emergency endpoint at /emergency/cache/clear that can be accessed without logging into the admin."
+        },
+        {
+            "title": "CLI Commands",
+            "path": "advanced/cli",
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "sections": [
+                "Running the CLI",
+                "Global Options",
+                "Site Information",
+                "Schema Commands",
+                "Collection Commands",
+                "Object Commands",
+                "Deck Commands",
+                "JumpStart Commands",
+                "Sync Commands",
+                "Cache & Jobs"
+            ],
+            "content": "cli commands the tcms cli tool is the command-line interface to total cms. it exposes core cms services as composable terminal commands, designed for both ai coding agents and human developers. running the cli php resources/bin/tcms options arguments all commands support a --json flag that outputs valid json to stdout. this is the contract ai agents rely on \u2014 no decorative output, no progress bars, no color codes. global options | option | description | |--------|-------------| | --json | output as json for ai agent compatibility | | -v | verbose output | | -q | quiet mode errors only | | -h, --help | display help for a command | | -v, --version | display version | --- site information info show site status, version, edition, license, collection count, and cache backend. tcms info tcms info --json json output: { \"version\": \"3.2.2\", \"build\": \"7f080a63\", \"edition\": \"pro\", \"license\": { \"valid\": true, \"trial\": false, \"trialdaysremaining\": null }, \"domain\": \"example.com\", \"collections\": { \"total\": 12 }, \"schemas\": { \"reserved\": 22, \"custom\": 4 }, \"cache\": { \"backend\": \"apcu\" } } --- schema commands schema:list list all schemas. tcms schema:list tcms schema:list --custom tcms schema:list --reserved tcms schema:list --category=commerce tcms schema:list --json | option | description | |--------|-------------| | --custom | only show custom schemas | | --reserved | only show reserved built-in schemas | | --category | filter by category | schema:get show full schema definition including properties, types, and field configurations. tcms schema:get blog tcms schema:get blog --json | argument | required | description | |----------|----------|-------------| | id | yes | schema id | schema:export export a schema to a json file. tcms schema:export blog --output=blog-schema.json tcms schema:export blog | argument | required | description | |----------|----------|-------------| | id | yes | schema id | | option | description | |--------|-------------| | --output, -o | output file path omit for stdout | schema:import import a schema from a json file. creates or updates the schema. tcms schema:import my-schema.json tcms schema:import my-schema.json --json | argument | required | description | |----------|----------|-------------| | file | yes | path to schema json file | --- collection commands collection:list list all collections with their schema and object count. tcms collection:list tcms collection:list --schema=blog tcms collection:list --category=content tcms collection:list --json | option | description | |--------|-------------| | --schema | filter by schema type | | --category | filter by category | collection:get show collection metadata including schema, sort order, and object count. tcms collection:get blog tcms collection:get blog --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | collection:query query a collection's index with filtering, searching, sorting, and pagination. tcms collection:query posts --search=\"photography\" --limit=5 tcms collection:query posts --include=\"featured:true\" --sort=\"-date\" tcms collection:query posts --exclude=\"draft:true\" --limit=10 --offset=20 tcms collection:query posts --filter=\"title:drone\" --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | option | description | |--------|-------------| | --search, -s | full-text search query | | --filter | contains filter field:value | | --include | include filter field:value,field:value | | --exclude | exclude filter field:value,field:value | | --sort | sort by property prefix with - for descending | | --limit, -l | maximum results default: 20 | | --offset, -o | number of results to skip default: 0 | json output: { \"total\": 37, \"offset\": 0, \"limit\": 5, \"results\": ... } collection:export export a collection to json, csv, or zip. tcms collection:export blog --output=blog.json tcms collection:export blog --format=csv --output=blog.csv tcms collection:export blog --format=zip --output=blog-backup.zip | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | option | description | |--------|-------------| | --format, -f | export format: json , csv , or zip default: json | | --output, -o | output file path omit for stdout; zip generates a default filename | the zip format includes all object json files and their associated media/assets. json export uses streaming for large collections when --output is specified. collection:import import objects into a collection from a json or csv file. tcms collection:import blog posts.json tcms collection:import blog data.csv tcms collection:import blog posts.json --update tcms collection:import blog posts.json --format=json --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | file | yes | path to json or csv file | | option | description | |--------|-------------| | --format, -f | import format: json or csv auto-detected from extension | | --update | update existing objects instead of skipping | --- object commands object:list list object ids in a collection. tcms object:list blog tcms object:list blog --limit=10 --offset=20 tcms object:list blog --json | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | option | description | |--------|-------------| | --limit, -l | maximum results | | --offset, -o | number of results to skip | object:get fetch a single object with all its properties. tcms object:get blog my-post tcms object:get blog my-post --json | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | id | yes | object id | object:export export a single object as json or zip with assets . tcms object:export blog my-post --output=my-post.json tcms object:export blog my-post --format=zip --output=my-post.zip tcms object:export blog my-post | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | id | yes | object id | | option | description | |--------|-------------| | --format, -f | export format: json or zip default: json | | --output, -o | output file path omit for stdout; zip generates a default filename | --- deck commands deck:import import items into a deck property from a json or csv file. tcms deck:import invoices inv-001 items line-items.json tcms deck:import invoices inv-001 items line-items.csv --update | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | object | yes | object id | | property | yes | deck property name | | file | yes | path to json or csv file | | option | description | |--------|-------------| | --format, -f | import format: json or csv auto-detected from extension | | --update | update existing deck items instead of skipping | --- jumpstart commands jumpstart:export export all site data schemas, collections, objects, templates as a jumpstart file. tcms jumpstart:export --output=my-site.json tcms jumpstart:export --name=\"my site\" --description=\"full site export\" tcms jumpstart:export --json | option | description | |--------|-------------| | --name | name for the export | | --description | description for the export | | --output, -o | output file path generates default filename if omitted | jumpstart:import import a jumpstart file to set up schemas, collections, objects, and templates. tcms jumpstart:import my-site.json tcms jumpstart:import my-site.json --json | argument | required | description | |----------|----------|-------------| | file | yes | path to jumpstart json file | --- sync commands push and pull schemas and templates between a local development instance and a production server. configure the production server url and api key in settings > sync in the admin dashboard. push push schemas and templates to the production server. tcms push tcms push --dry-run tcms push --schemas=blog,products tcms push --templates=blog-post,sidebar tcms push --schemas=blog --templates=blog-post --dry-run | option | description | |--------|-------------| | --schemas | comma-separated schema ids to push default: all custom | | --templates | comma-separated template ids to push default: all custom | | --dry-run | preview what would be pushed without sending | pull pull schemas and templates from the production server. tcms pull tcms pull --dry-run tcms pull --schemas=blog tcms pull --templates=blog-post,sidebar | option | description | |--------|-------------| | --schemas | comma-separated schema ids to pull default: all | | --templates | comma-separated template ids to pull default: all | | --dry-run | preview what would be pulled without applying | what gets synced: custom schemas and custom templates only. what never gets synced: content/objects, media/images, system settings, api keys, reserved schemas. --- cache & jobs cache:clear clear all caches. when run from cli, a signal file is written so the web process clears its apcu cache on the next request. tcms cache:clear tcms cache:clear --json jobs:process process the pending job queue. this is typically run via cron. tcms jobs:process tcms jobs:process -v tcms jobs:process --memory=1g tcms jobs:process --json | option | description | |--------|-------------| | --memory, -m | memory limit default: 512m | | -v | verbose output with per-job details | cron setup: php /path/to/resources/bin/tcms jobs:process"
         },
         {
             "title": "Migration of Total CMS v1 Data",
@@ -3874,6 +3892,458 @@
                 "{\n    \"id\": \"team\",\n    \"name\": \"Team Members\",\n    \"schema\": \"team\",\n    \"description\": \"Company team members and their profiles.\",\n\n    \"url\": \"/about/team\",\n    \"prettyUrl\": true,\n\n    \"category\": \"Content\",\n    \"labelPlural\": \"Team Members\",\n    \"labelSingular\": \"Team Member\",\n    \"sortBy\": \"lastName\",\n    \"reverseSort\": false,\n\n    \"groups\": [],\n    \"publicOperations\": [\"read\"],\n\n    \"queueRebuildOnSave\": false,\n\n    \"manualSort\": {\n        \"position\": [\"ceo\", \"cfo\", \"cmo\", \"vp\", \"director\", \"manager\"],\n        \"department\": [\"executive\", \"engineering\", \"sales\"]\n    },\n\n    \"formSettings\": {\n        \"helpStyle\": \"tooltip\",\n        \"helpOnFocus\": true,\n        \"newActions\": [\n            {\"action\": \"redirect-object\", \"link\": \"/admin/collections/team/{id}\"}\n        ],\n        \"editActions\": [\n            {\"action\": \"refresh\"}\n        ]\n    },\n\n    \"properties\": {\n        \"position\": {\n            \"options\": [\n                {\"label\": \"CEO\", \"value\": \"ceo\"},\n                {\"label\": \"CFO\", \"value\": \"cfo\"},\n                {\"label\": \"CMO\", \"value\": \"cmo\"},\n                {\"label\": \"VP\", \"value\": \"vp\"},\n                {\"label\": \"Director\", \"value\": \"director\"},\n                {\"label\": \"Manager\", \"value\": \"manager\"},\n                {\"label\": \"Staff\", \"value\": \"staff\"}\n            ]\n        }\n    },\n\n    \"customProperties\": {},\n\n    \"count\": 24,\n    \"totalObjects\": 22,\n    \"lastUpdated\": \"2024-01-15T14:30:00+00:00\"\n}"
             ],
             "url": "https://docs.totalcms.co/collections/settings/"
+        }
+    ],
+    "cli_commands": [
+        {
+            "name": "info",
+            "description": "Show site status, version, edition, license, collection count, and cache backend.",
+            "arguments": [],
+            "options": [],
+            "examples": [
+                "tcms info\ntcms info --json",
+                "{\n    \"version\": \"3.2.2\",\n    \"build\": \"7f080a63\",\n    \"edition\": \"pro\",\n    \"license\": { \"valid\": true, \"trial\": false, \"trialDaysRemaining\": null },\n    \"domain\": \"example.com\",\n    \"collections\": { \"total\": 12 },\n    \"schemas\": { \"reserved\": 22, \"custom\": 4 },\n    \"cache\": { \"backend\": \"apcu\" }\n}"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "schema:list",
+            "description": "List all schemas.",
+            "arguments": [],
+            "options": [
+                {
+                    "name": "--custom",
+                    "description": "Only show custom schemas"
+                },
+                {
+                    "name": "--reserved",
+                    "description": "Only show reserved (built-in) schemas"
+                },
+                {
+                    "name": "--category",
+                    "description": "Filter by category"
+                }
+            ],
+            "examples": [
+                "tcms schema:list\ntcms schema:list --custom\ntcms schema:list --reserved\ntcms schema:list --category=Commerce\ntcms schema:list --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "schema:get",
+            "description": "Show full schema definition including properties, types, and field configurations.",
+            "arguments": [
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Schema ID"
+                }
+            ],
+            "options": [],
+            "examples": [
+                "tcms schema:get blog\ntcms schema:get blog --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "schema:export",
+            "description": "Export a schema to a JSON file.",
+            "arguments": [
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Schema ID"
+                }
+            ],
+            "options": [
+                {
+                    "name": "--output, -o",
+                    "description": "Output file path (omit for stdout)"
+                }
+            ],
+            "examples": [
+                "tcms schema:export blog --output=blog-schema.json\ntcms schema:export blog"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "schema:import",
+            "description": "Import a schema from a JSON file. Creates or updates the schema.",
+            "arguments": [
+                {
+                    "name": "file",
+                    "required": true,
+                    "description": "Path to schema JSON file"
+                }
+            ],
+            "options": [],
+            "examples": [
+                "tcms schema:import my-schema.json\ntcms schema:import my-schema.json --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "collection:list",
+            "description": "List all collections with their schema and object count.",
+            "arguments": [],
+            "options": [
+                {
+                    "name": "--schema",
+                    "description": "Filter by schema type"
+                },
+                {
+                    "name": "--category",
+                    "description": "Filter by category"
+                }
+            ],
+            "examples": [
+                "tcms collection:list\ntcms collection:list --schema=blog\ntcms collection:list --category=Content\ntcms collection:list --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "collection:get",
+            "description": "Show collection metadata including schema, sort order, and object count.",
+            "arguments": [
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Collection ID"
+                }
+            ],
+            "options": [],
+            "examples": [
+                "tcms collection:get blog\ntcms collection:get blog --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "collection:query",
+            "description": "Query a collection's index with filtering, searching, sorting, and pagination.",
+            "arguments": [
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Collection ID"
+                }
+            ],
+            "options": [
+                {
+                    "name": "--search, -s",
+                    "description": "Full-text search query"
+                },
+                {
+                    "name": "--filter",
+                    "description": "Contains filter (`field:value`)"
+                },
+                {
+                    "name": "--include",
+                    "description": "Include filter (`field:value,field:value`)"
+                },
+                {
+                    "name": "--exclude",
+                    "description": "Exclude filter (`field:value,field:value`)"
+                },
+                {
+                    "name": "--sort",
+                    "description": "Sort by property (prefix with `-` for descending)"
+                },
+                {
+                    "name": "--limit, -l",
+                    "description": "Maximum results (default: 20)"
+                },
+                {
+                    "name": "--offset, -o",
+                    "description": "Number of results to skip (default: 0)"
+                }
+            ],
+            "examples": [
+                "tcms collection:query posts --search=\"photography\" --limit=5\ntcms collection:query posts --include=\"featured:true\" --sort=\"-date\"\ntcms collection:query posts --exclude=\"draft:true\" --limit=10 --offset=20\ntcms collection:query posts --filter=\"title:drone\" --json",
+                "{\n    \"total\": 37,\n    \"offset\": 0,\n    \"limit\": 5,\n    \"results\": [...]\n}"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "collection:export",
+            "description": "Export a collection to JSON, CSV, or ZIP.",
+            "arguments": [
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Collection ID"
+                }
+            ],
+            "options": [
+                {
+                    "name": "--format, -f",
+                    "description": "Export format: `json`, `csv`, or `zip` (default: json)"
+                },
+                {
+                    "name": "--output, -o",
+                    "description": "Output file path (omit for stdout; zip generates a default filename)"
+                }
+            ],
+            "examples": [
+                "tcms collection:export blog --output=blog.json\ntcms collection:export blog --format=csv --output=blog.csv\ntcms collection:export blog --format=zip --output=blog-backup.zip"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "collection:import",
+            "description": "Import objects into a collection from a JSON or CSV file.",
+            "arguments": [
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Collection ID"
+                },
+                {
+                    "name": "file",
+                    "required": true,
+                    "description": "Path to JSON or CSV file"
+                }
+            ],
+            "options": [
+                {
+                    "name": "--format, -f",
+                    "description": "Import format: `json` or `csv` (auto-detected from extension)"
+                },
+                {
+                    "name": "--update",
+                    "description": "Update existing objects instead of skipping"
+                }
+            ],
+            "examples": [
+                "tcms collection:import blog posts.json\ntcms collection:import blog data.csv\ntcms collection:import blog posts.json --update\ntcms collection:import blog posts.json --format=json --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "object:list",
+            "description": "List object IDs in a collection.",
+            "arguments": [
+                {
+                    "name": "collection",
+                    "required": true,
+                    "description": "Collection ID"
+                }
+            ],
+            "options": [
+                {
+                    "name": "--limit, -l",
+                    "description": "Maximum results"
+                },
+                {
+                    "name": "--offset, -o",
+                    "description": "Number of results to skip"
+                }
+            ],
+            "examples": [
+                "tcms object:list blog\ntcms object:list blog --limit=10 --offset=20\ntcms object:list blog --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "object:get",
+            "description": "Fetch a single object with all its properties.",
+            "arguments": [
+                {
+                    "name": "collection",
+                    "required": true,
+                    "description": "Collection ID"
+                },
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Object ID"
+                }
+            ],
+            "options": [],
+            "examples": [
+                "tcms object:get blog my-post\ntcms object:get blog my-post --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "object:export",
+            "description": "Export a single object as JSON or ZIP (with assets).",
+            "arguments": [
+                {
+                    "name": "collection",
+                    "required": true,
+                    "description": "Collection ID"
+                },
+                {
+                    "name": "id",
+                    "required": true,
+                    "description": "Object ID"
+                }
+            ],
+            "options": [
+                {
+                    "name": "--format, -f",
+                    "description": "Export format: `json` or `zip` (default: json)"
+                },
+                {
+                    "name": "--output, -o",
+                    "description": "Output file path (omit for stdout; zip generates a default filename)"
+                }
+            ],
+            "examples": [
+                "tcms object:export blog my-post --output=my-post.json\ntcms object:export blog my-post --format=zip --output=my-post.zip\ntcms object:export blog my-post"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "deck:import",
+            "description": "Import items into a deck property from a JSON or CSV file.",
+            "arguments": [
+                {
+                    "name": "collection",
+                    "required": true,
+                    "description": "Collection ID"
+                },
+                {
+                    "name": "object",
+                    "required": true,
+                    "description": "Object ID"
+                },
+                {
+                    "name": "property",
+                    "required": true,
+                    "description": "Deck property name"
+                },
+                {
+                    "name": "file",
+                    "required": true,
+                    "description": "Path to JSON or CSV file"
+                }
+            ],
+            "options": [
+                {
+                    "name": "--format, -f",
+                    "description": "Import format: `json` or `csv` (auto-detected from extension)"
+                },
+                {
+                    "name": "--update",
+                    "description": "Update existing deck items instead of skipping"
+                }
+            ],
+            "examples": [
+                "tcms deck:import invoices inv-001 items line-items.json\ntcms deck:import invoices inv-001 items line-items.csv --update"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "jumpstart:export",
+            "description": "Export all site data (schemas, collections, objects, templates) as a JumpStart file.",
+            "arguments": [],
+            "options": [
+                {
+                    "name": "--name",
+                    "description": "Name for the export"
+                },
+                {
+                    "name": "--description",
+                    "description": "Description for the export"
+                },
+                {
+                    "name": "--output, -o",
+                    "description": "Output file path (generates default filename if omitted)"
+                }
+            ],
+            "examples": [
+                "tcms jumpstart:export --output=my-site.json\ntcms jumpstart:export --name=\"My Site\" --description=\"Full site export\"\ntcms jumpstart:export --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "jumpstart:import",
+            "description": "Import a JumpStart file to set up schemas, collections, objects, and templates.",
+            "arguments": [
+                {
+                    "name": "file",
+                    "required": true,
+                    "description": "Path to JumpStart JSON file"
+                }
+            ],
+            "options": [],
+            "examples": [
+                "tcms jumpstart:import my-site.json\ntcms jumpstart:import my-site.json --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "push",
+            "description": "Push schemas and templates to the production server.",
+            "arguments": [],
+            "options": [
+                {
+                    "name": "--schemas",
+                    "description": "Comma-separated schema IDs to push (default: all custom)"
+                },
+                {
+                    "name": "--templates",
+                    "description": "Comma-separated template IDs to push (default: all custom)"
+                },
+                {
+                    "name": "--dry-run",
+                    "description": "Preview what would be pushed without sending"
+                }
+            ],
+            "examples": [
+                "tcms push\ntcms push --dry-run\ntcms push --schemas=blog,products\ntcms push --templates=blog-post,sidebar\ntcms push --schemas=blog --templates=blog-post --dry-run"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "pull",
+            "description": "Pull schemas and templates from the production server.",
+            "arguments": [],
+            "options": [
+                {
+                    "name": "--schemas",
+                    "description": "Comma-separated schema IDs to pull (default: all)"
+                },
+                {
+                    "name": "--templates",
+                    "description": "Comma-separated template IDs to pull (default: all)"
+                },
+                {
+                    "name": "--dry-run",
+                    "description": "Preview what would be pulled without applying"
+                }
+            ],
+            "examples": [
+                "tcms pull\ntcms pull --dry-run\ntcms pull --schemas=blog\ntcms pull --templates=blog-post,sidebar"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "cache:clear",
+            "description": "Clear all caches. When run from CLI, a signal file is written so the web process clears its APCu cache on the next request.",
+            "arguments": [],
+            "options": [],
+            "examples": [
+                "tcms cache:clear\ntcms cache:clear --json"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
+        },
+        {
+            "name": "jobs:process",
+            "description": "Process the pending job queue. This is typically run via cron.",
+            "arguments": [],
+            "options": [
+                {
+                    "name": "--memory, -m",
+                    "description": "Memory limit (default: 512M)"
+                }
+            ],
+            "examples": [
+                "tcms jobs:process\ntcms jobs:process -v\ntcms jobs:process --memory=1G\ntcms jobs:process --json",
+                "* * * * * php /path/to/resources/bin/tcms jobs:process"
+            ],
+            "url": "https://docs.totalcms.co/advanced/cli/"
         }
     ]
 }
