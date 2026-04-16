@@ -939,6 +939,7 @@ function buildExtensionApiReference(): array
 			['edition' => 'standard', 'level' => 2, 'description' => 'Standard features including custom collections'],
 			['edition' => 'pro',      'level' => 3, 'description' => 'Full features including custom schemas and extensions schemas'],
 		],
+		'starter_repo' => 'https://github.com/totalcms/extension-starter',
 		'url' => 'https://docs.totalcms.co/extensions/overview/',
 	];
 }

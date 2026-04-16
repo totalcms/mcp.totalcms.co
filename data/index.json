@@ -1,6 +1,6 @@
 {
     "version": "1.0.0",
-    "built_at": "2026-04-16T14:17:27+00:00",
+    "built_at": "2026-04-16T14:57:55+00:00",
     "pages": [
         {
             "title": "Sitemap Builder",
@@ -529,6 +529,7 @@
                 "Edition Requirements",
                 "Fault Isolation",
                 "Managing Extensions",
+                "Starter Template",
                 "Next Steps"
             ],
             "content": "extensions overview the total cms extension system lets you add custom functionality without modifying core files. extensions can add twig functions and filters, cli commands, admin pages, rest api endpoints, custom field types, event listeners, dashboard widgets, and schemas. how extensions work extensions follow a two-phase lifecycle: 1. register -- declare what your extension provides twig functions, cli commands, etc. 2. boot -- wire into the running application subscribe to events, resolve services every extension implements the extensioninterface and interacts with total cms through an extensioncontext object that provides a stable, versioned api. directory structure extensions live in tcms-data/extensions/{vendor}/{extension-name}/ : tcms-data/extensions/ acme/ seo-pro/ extension.json manifest extension.php entry point implements extensioninterface src/ additional php classes schemas/ read-only schemas pro+ only templates/ twig templates assets/ css, js, images quick example a minimal extension that adds a twig function: extension.json : { \"id\": \"acme/hello\", \"name\": \"hello extension\", \"version\": \"1.0.0\", \"permissions\": \"twig:functions\" , \"entrypoint\": \"extension.php\", \"license\": \"mit\" } extension.php :"
@@ -4779,6 +4780,7 @@
                 "description": "Full features including custom schemas and extensions schemas"
             }
         ],
+        "starter_repo": "https://github.com/totalcms/extension-starter",
         "url": "https://docs.totalcms.co/extensions/overview/"
     }
 }
