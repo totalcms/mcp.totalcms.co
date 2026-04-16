@@ -1,10 +1,12 @@
 # Total CMS Docs MCP Server
 
-MCP server that gives AI coding agents real-time access to Total CMS documentation. Hosted at `mcp.totalcms.co`.
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that gives AI coding agents real-time access to Total CMS documentation. Hosted at [mcp.totalcms.co](https://mcp.totalcms.co).
+
+Use it with Claude Code, Cursor, Windsurf, or any MCP-compatible AI tool to get accurate, up-to-date answers about Total CMS while you build.
 
 ## Setup
 
-Add to your AI tool's MCP config (Claude Code, Cursor, Windsurf, etc.):
+Add to your AI tool's MCP config:
 
 ```json
 {
@@ -18,7 +20,7 @@ Add to your AI tool's MCP config (Claude Code, Cursor, Windsurf, etc.):
 
 No authentication required.
 
-## Tools
+## Available Tools
 
 | Tool | Description |
 |------|-------------|
@@ -28,15 +30,17 @@ No authentication required.
 | `docs_field_type` | Field type configuration options |
 | `docs_api_endpoint` | REST API endpoint details |
 | `docs_schema_config` | Schema/collection config options |
-| `docs_cli_command` | CLI commands (stub — in development) |
+| `docs_cli_command` | CLI command reference |
 
-## Requirements
+## Self-Hosting
+
+### Requirements
 
 - PHP 8.2+
-- Apache with mod_rewrite + PHP-FPM
+- Apache with mod_rewrite
 - Composer
 
-## Development
+### Development
 
 ```bash
 composer install
@@ -44,17 +48,16 @@ php bin/build-index.php /path/to/totalcms
 php -S localhost:8765 -t public/
 ```
 
-## Deployment
+### Building the Index
+
+The documentation index is built from markdown files in the [totalcms/cms](https://github.com/totalcms/cms) repo:
 
 ```bash
 bin/build.sh /path/to/totalcms
 ```
 
-## Maintenance
+## Links
 
-```bash
-# Clean up expired MCP sessions
-bin/cleanup-sessions.sh
-```
-
-Connection logs are written to `logs/connections.log`.
+- [Total CMS](https://totalcms.co)
+- [Documentation](https://docs.totalcms.co)
+- [MCP Protocol](https://modelcontextprotocol.io)
