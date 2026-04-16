@@ -18,7 +18,11 @@ declare(strict_types=1);
  * - schema_config: Schema/collection configuration options
  */
 
-$totalcmsPath = $argv[1] ?? '/Users/joeworkman/Developer/totalcms';
+$totalcmsPath = $argv[1] ?? '';
+if ($totalcmsPath === '') {
+	fwrite(STDERR, "Usage: php bin/build-index.php /path/to/totalcms\n");
+	exit(1);
+}
 $docsDir = $totalcmsPath . '/resources/docs';
 $outputFile = __DIR__ . '/../data/index.json';
 

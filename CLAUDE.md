@@ -47,7 +47,7 @@ https://mcp.totalcms.test
 
 ## Documentation Source
 
-The index is built from markdown files in the main Total CMS repo at `/Users/joeworkman/Developer/totalcms/resources/docs/`. The source of truth is always that repo — this project only reads and indexes it.
+The index is built from markdown files in the main Total CMS repo (`resources/docs/` in `totalcms/cms`). The source of truth is always that repo — this project only reads and indexes it.
 
 ## Apache Configuration
 

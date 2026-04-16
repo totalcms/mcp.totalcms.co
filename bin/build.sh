@@ -14,7 +14,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-TOTALCMS_PATH="${1:-/Users/joeworkman/Developer/totalcms}"
+TOTALCMS_PATH="${1:?Usage: bin/build.sh /path/to/totalcms}"
 
 cd "$PROJECT_DIR"
 
