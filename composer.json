@@ -21,5 +21,10 @@
         "php-http/discovery": "^1.20",
         "guzzlehttp/psr7": "^2.9",
         "laminas/laminas-httphandlerrunner": "^2.13"
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     }
 }
