@@ -692,6 +692,14 @@ function extractCodeBlocks(string $section): array
  */
 function parseCliCommands(string $content): array
 {
+	// Commands introduced in specific versions (all unlisted commands are 3.2.0+)
+	$versionMap = [
+		'extension:list'    => '3.3.0',
+		'extension:enable'  => '3.3.0',
+		'extension:disable' => '3.3.0',
+		'extension:remove'  => '3.3.0',
+	];
+
 	$commands = [];
 	$body = removeFrontmatter($content);
 
@@ -740,7 +748,7 @@ function parseCliCommands(string $content): array
 			}
 		}
 
-		$commands[] = [
+		$cmd = [
 			'name'        => $name,
 			'description' => $description,
 			'arguments'   => $arguments,
@@ -748,6 +756,12 @@ function parseCliCommands(string $content): array
 			'examples'    => $examples,
 			'url'         => 'https://docs.totalcms.co/advanced/cli/',
 		];
+
+		if (isset($versionMap[$name])) {
+			$cmd['min_version'] = $versionMap[$name];
+		}
+
+		$commands[] = $cmd;
 	}
 
 	return $commands;
@@ -762,6 +776,8 @@ function parseCliCommands(string $content): array
 function buildExtensionApiReference(): array
 {
 	return [
+		'min_version' => '3.3.0',
+		'note' => 'The extension system requires Total CMS 3.3.0 or later. It is not available in earlier versions.',
 		'context_methods' => [
 			[
 				'name'        => 'extensionId',

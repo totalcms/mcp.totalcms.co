@@ -1,6 +1,6 @@
 {
     "version": "1.0.0",
-    "built_at": "2026-04-16T14:57:55+00:00",
+    "built_at": "2026-04-16T21:20:59+00:00",
     "pages": [
         {
             "title": "Sitemap Builder",
@@ -4497,6 +4497,8 @@
         }
     ],
     "extension_api": {
+        "min_version": "3.3.0",
+        "note": "The extension system requires Total CMS 3.3.0 or later. It is not available in earlier versions.",
         "context_methods": [
             {
                 "name": "extensionId",
