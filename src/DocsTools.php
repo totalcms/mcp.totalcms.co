@@ -48,13 +48,19 @@ class DocsTools
 		foreach ($this->index['pages'] ?? [] as $page) {
 			$score = $this->scorePage($page, $terms);
 			if ($score > 0) {
-				$results[] = [
+				$result = [
 					'title'   => $page['title'],
 					'path'    => $page['path'],
 					'url'     => $page['url'],
 					'excerpt' => $this->extractContext($page['content'] ?? '', $terms),
 					'score'   => $score,
 				];
+
+				if (isset($page['since'])) {
+					$result['since'] = $page['since'];
+				}
+
+				$results[] = $result;
 			}
 		}
 

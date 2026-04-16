@@ -72,13 +72,19 @@ foreach ($files as $relativePath => $fullPath) {
 	// Clean content for searching
 	$searchContent = cleanForSearch($body);
 
-	$pages[] = [
+	$page = [
 		'title'    => $frontmatter['title'] ?? extractH1($body) ?? basename($path),
 		'path'     => $path,
 		'url'      => 'https://docs.totalcms.co/' . str_replace('.md', '/', $relativePath),
 		'sections' => $sections,
 		'content'  => $searchContent,
 	];
+
+	if (isset($frontmatter['since'])) {
+		$page['since'] = $frontmatter['since'];
+	}
+
+	$pages[] = $page;
 }
 
 echo "  Pages indexed: " . count($pages) . "\n";
@@ -692,15 +698,9 @@ function extractCodeBlocks(string $section): array
  */
 function parseCliCommands(string $content): array
 {
-	// Commands introduced in specific versions (all unlisted commands are 3.2.0+)
-	$versionMap = [
-		'extension:list'    => '3.3.0',
-		'extension:enable'  => '3.3.0',
-		'extension:disable' => '3.3.0',
-		'extension:remove'  => '3.3.0',
-	];
-
 	$commands = [];
+	$frontmatter = parseFrontmatter($content);
+	$pageSince = $frontmatter['since'] ?? null;
 	$body = removeFrontmatter($content);
 
 	// Split by H3 headings that contain backtick command names
@@ -757,8 +757,8 @@ function parseCliCommands(string $content): array
 			'url'         => 'https://docs.totalcms.co/advanced/cli/',
 		];
 
-		if (isset($versionMap[$name])) {
-			$cmd['min_version'] = $versionMap[$name];
+		if ($pageSince !== null) {
+			$cmd['since'] = $pageSince;
 		}
 
 		$commands[] = $cmd;
