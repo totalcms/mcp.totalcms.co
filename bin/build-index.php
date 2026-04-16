@@ -219,6 +219,8 @@ echo "  CLI commands: " . count($cliCommands) . "\n";
 // -------------------------------------------------------
 // Build the final index
 // -------------------------------------------------------
+$extensionApi = buildExtensionApiReference();
+
 $index = [
 	'version'        => '1.0.0',
 	'built_at'       => date('c'),
@@ -229,6 +231,7 @@ $index = [
 	'api_endpoints'  => $apiEndpoints,
 	'schema_config'  => $schemaConfig,
 	'cli_commands'   => $cliCommands,
+	'extension_api'  => $extensionApi,
 ];
 
 $json = json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -748,4 +751,194 @@ function parseCliCommands(string $content): array
 	}
 
 	return $commands;
+}
+
+/**
+ * Build a structured reference of the extension API.
+ * This is hand-maintained (not parsed from docs) since it represents the code contract.
+ *
+ * @return array<string, mixed>
+ */
+function buildExtensionApiReference(): array
+{
+	return [
+		'context_methods' => [
+			[
+				'name'        => 'extensionId',
+				'signature'   => 'extensionId(): string',
+				'description' => 'Get the extension ID (e.g. "vendor/extension-name")',
+				'phase'       => 'both',
+			],
+			[
+				'name'        => 'extensionPath',
+				'signature'   => 'extensionPath(): string',
+				'description' => 'Get the absolute filesystem path to the extension directory',
+				'phase'       => 'both',
+			],
+			[
+				'name'        => 'manifest',
+				'signature'   => 'manifest(): ExtensionManifest',
+				'description' => 'Get the parsed extension manifest',
+				'phase'       => 'both',
+			],
+			[
+				'name'        => 'settings',
+				'signature'   => 'settings(): array',
+				'description' => 'Get all extension settings from tcms-data',
+				'phase'       => 'both',
+				'permission'  => 'settings:read',
+			],
+			[
+				'name'        => 'setting',
+				'signature'   => 'setting(string $key, mixed $default = null): mixed',
+				'description' => 'Get a single extension setting value',
+				'phase'       => 'both',
+				'permission'  => 'settings:read',
+			],
+			[
+				'name'        => 'get',
+				'signature'   => 'get(string $serviceId): mixed',
+				'description' => 'Resolve a service from the DI container. Only use in boot(), not register().',
+				'phase'       => 'boot',
+			],
+			[
+				'name'        => 'has',
+				'signature'   => 'has(string $serviceId): bool',
+				'description' => 'Check if a service exists in the DI container',
+				'phase'       => 'boot',
+			],
+			[
+				'name'        => 'installSchema',
+				'signature'   => 'installSchema(array $schemaData): void',
+				'description' => 'Install a user-editable schema into tcms-data/.schemas/. Skips if schema already exists. Pro+ only.',
+				'phase'       => 'boot',
+			],
+			[
+				'name'        => 'addTwigFunction',
+				'signature'   => 'addTwigFunction(TwigFunction $function): void',
+				'description' => 'Register a custom Twig function available in all templates',
+				'phase'       => 'register',
+				'permission'  => 'twig:functions',
+			],
+			[
+				'name'        => 'addTwigFilter',
+				'signature'   => 'addTwigFilter(TwigFilter $filter): void',
+				'description' => 'Register a custom Twig filter',
+				'phase'       => 'register',
+				'permission'  => 'twig:filters',
+			],
+			[
+				'name'        => 'addTwigGlobal',
+				'signature'   => 'addTwigGlobal(string $name, mixed $value): void',
+				'description' => 'Register a Twig global variable',
+				'phase'       => 'register',
+				'permission'  => 'twig:globals',
+			],
+			[
+				'name'        => 'addCommand',
+				'signature'   => 'addCommand(Command $command): void',
+				'description' => 'Register a CLI command. Name must be namespaced (e.g. "vendor:command").',
+				'phase'       => 'register',
+				'permission'  => 'cli:commands',
+			],
+			[
+				'name'        => 'addRoutes',
+				'signature'   => 'addRoutes(callable $registrar): void',
+				'description' => 'Register routes under /ext/{vendor}/{name}/. Callable receives RouteCollectorProxy.',
+				'phase'       => 'register',
+				'permission'  => 'routes:api or routes:admin',
+			],
+			[
+				'name'        => 'addAdminNavItem',
+				'signature'   => 'addAdminNavItem(AdminNavItem $item): void',
+				'description' => 'Add a navigation item to the admin sidebar',
+				'phase'       => 'register',
+				'permission'  => 'admin:nav',
+			],
+			[
+				'name'        => 'addDashboardWidget',
+				'signature'   => 'addDashboardWidget(DashboardWidget $widget): void',
+				'description' => 'Add a widget to the admin dashboard',
+				'phase'       => 'register',
+				'permission'  => 'admin:widgets',
+			],
+			[
+				'name'        => 'addFieldType',
+				'signature'   => 'addFieldType(string $typeName, string $fqcn): void',
+				'description' => 'Register a custom field type. Class must extend FormField.',
+				'phase'       => 'register',
+				'permission'  => 'fields:register',
+			],
+			[
+				'name'        => 'addEventListener',
+				'signature'   => 'addEventListener(string $eventName, callable $listener, int $priority = 0): void',
+				'description' => 'Subscribe to a content event. Lower priority = earlier execution.',
+				'phase'       => 'register',
+				'permission'  => 'events:listen',
+			],
+			[
+				'name'        => 'addContainerDefinition',
+				'signature'   => 'addContainerDefinition(string $id, callable $factory): void',
+				'description' => 'Register a service in the DI container',
+				'phase'       => 'register',
+				'permission'  => 'container:definitions',
+			],
+		],
+		'events' => [
+			[
+				'name'        => 'object.created',
+				'description' => 'Fired after a new object is saved',
+				'payload'     => ['collection' => 'string', 'id' => 'string'],
+			],
+			[
+				'name'        => 'object.updated',
+				'description' => 'Fired after an existing object is updated',
+				'payload'     => ['collection' => 'string', 'id' => 'string'],
+			],
+			[
+				'name'        => 'object.deleted',
+				'description' => 'Fired after an object is deleted',
+				'payload'     => ['collection' => 'string', 'id' => 'string'],
+			],
+			[
+				'name'        => 'schema.saved',
+				'description' => 'Fired after a schema is created or updated',
+				'payload'     => ['schema' => 'string'],
+			],
+		],
+		'permissions' => [
+			['id' => 'twig:functions',        'description' => 'Register custom Twig functions'],
+			['id' => 'twig:filters',          'description' => 'Register custom Twig filters'],
+			['id' => 'twig:globals',          'description' => 'Register Twig global variables'],
+			['id' => 'cli:commands',          'description' => 'Register CLI commands'],
+			['id' => 'routes:api',            'description' => 'Register REST API endpoints'],
+			['id' => 'routes:admin',          'description' => 'Register admin pages'],
+			['id' => 'admin:nav',             'description' => 'Add items to admin navigation'],
+			['id' => 'admin:widgets',         'description' => 'Add dashboard widgets'],
+			['id' => 'events:listen',         'description' => 'Subscribe to content events'],
+			['id' => 'fields:register',       'description' => 'Register custom field types'],
+			['id' => 'settings:read',         'description' => 'Read extension settings'],
+			['id' => 'settings:write',        'description' => 'Write extension settings'],
+			['id' => 'container:definitions', 'description' => 'Register DI container services'],
+		],
+		'manifest_fields' => [
+			['field' => 'id',              'required' => true,  'description' => 'Unique ID in vendor/name format'],
+			['field' => 'name',            'required' => true,  'description' => 'Human-readable name'],
+			['field' => 'version',         'required' => true,  'description' => 'Semver version (e.g. 1.0.0)'],
+			['field' => 'description',     'required' => false, 'description' => 'Short description'],
+			['field' => 'requires',        'required' => false, 'description' => 'Version constraints (totalcms, php, extensions)'],
+			['field' => 'permissions',     'required' => false, 'description' => 'Array of permission identifiers'],
+			['field' => 'min_edition',     'required' => false, 'description' => 'Minimum edition: lite, standard, or pro'],
+			['field' => 'entrypoint',      'required' => false, 'description' => 'Path to ExtensionInterface class (default: Extension.php)'],
+			['field' => 'settings_schema', 'required' => false, 'description' => 'Path to settings JSON Schema file'],
+			['field' => 'author',          'required' => false, 'description' => 'Author object with name and url'],
+			['field' => 'license',         'required' => false, 'description' => 'License identifier (default: proprietary)'],
+		],
+		'editions' => [
+			['edition' => 'lite',     'level' => 1, 'description' => 'Basic edition, available to all'],
+			['edition' => 'standard', 'level' => 2, 'description' => 'Standard features including custom collections'],
+			['edition' => 'pro',      'level' => 3, 'description' => 'Full features including custom schemas and extensions schemas'],
+		],
+		'url' => 'https://docs.totalcms.co/extensions/overview/',
+	];
 }

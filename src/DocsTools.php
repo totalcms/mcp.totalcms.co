@@ -387,4 +387,100 @@ class DocsTools
 
 		return $prefix . trim($excerpt) . $suffix;
 	}
+
+	/**
+	 * Look up the Total CMS extension API. Query by method name, event name,
+	 * permission, or manifest field. Returns detailed information about the
+	 * extension system for building extensions.
+	 */
+	#[McpTool(
+		name: 'docs_extension',
+		description: 'Look up Total CMS extension API details: context methods, events, permissions, or manifest fields. Example: docs_extension("addTwigFunction") or docs_extension("object.created") or docs_extension("permissions")',
+		annotations: new ToolAnnotations(readOnlyHint: true),
+	)]
+	public function extension(string $query): string
+	{
+		$query = strtolower(trim($query));
+		$api = $this->index['extension_api'] ?? [];
+
+		if ($api === []) {
+			return json_encode(['error' => 'Extension API index not available. Rebuild the index.'], JSON_THROW_ON_ERROR);
+		}
+
+		// Return full section if querying by category
+		if ($query === 'methods' || $query === 'context' || $query === 'context_methods') {
+			return json_encode($api['context_methods'] ?? [], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+		if ($query === 'events') {
+			return json_encode($api['events'] ?? [], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+		if ($query === 'permissions') {
+			return json_encode($api['permissions'] ?? [], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+		if ($query === 'manifest') {
+			return json_encode($api['manifest_fields'] ?? [], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+		if ($query === 'editions') {
+			return json_encode($api['editions'] ?? [], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+
+		// Search context methods by name
+		foreach ($api['context_methods'] ?? [] as $method) {
+			if (strtolower($method['name']) === $query) {
+				return json_encode($method, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Search events by name
+		foreach ($api['events'] ?? [] as $event) {
+			if (strtolower($event['name']) === $query) {
+				return json_encode($event, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Search permissions by ID
+		foreach ($api['permissions'] ?? [] as $perm) {
+			if (strtolower($perm['id']) === $query) {
+				return json_encode($perm, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Search manifest fields
+		foreach ($api['manifest_fields'] ?? [] as $field) {
+			if (strtolower($field['field']) === $query) {
+				return json_encode($field, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Partial match across all sections
+		$matches = [];
+		foreach ($api['context_methods'] ?? [] as $method) {
+			if (str_contains(strtolower($method['name']), $query) || str_contains(strtolower($method['description']), $query)) {
+				$matches[] = ['type' => 'method', ...$method];
+			}
+		}
+		foreach ($api['events'] ?? [] as $event) {
+			if (str_contains(strtolower($event['name']), $query) || str_contains(strtolower($event['description']), $query)) {
+				$matches[] = ['type' => 'event', ...$event];
+			}
+		}
+		foreach ($api['permissions'] ?? [] as $perm) {
+			if (str_contains(strtolower($perm['id']), $query) || str_contains(strtolower($perm['description']), $query)) {
+				$matches[] = ['type' => 'permission', ...$perm];
+			}
+		}
+
+		if (!empty($matches)) {
+			return json_encode([
+				'message' => "No exact match for '{$query}'. Related results:",
+				'matches' => $matches,
+			], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+
+		return json_encode([
+			'error' => "No extension API match for '{$query}'.",
+			'hint'  => 'Try: "methods", "events", "permissions", "manifest", "editions", or a specific name like "addTwigFunction" or "object.created"',
+			'url'   => $api['url'] ?? 'https://docs.totalcms.co/extensions/overview/',
+		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+	}
 }
