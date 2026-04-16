@@ -1,6 +1,6 @@
 {
     "version": "1.0.0",
-    "built_at": "2026-04-16T21:30:39+00:00",
+    "built_at": "2026-04-16T22:00:19+00:00",
     "pages": [
         {
             "title": "Sitemap Builder",
@@ -73,7 +73,8 @@
                 "Cache & Jobs",
                 "Update Commands"
             ],
-            "content": "cli commands the tcms cli tool is the command-line interface to total cms. it exposes core cms services as composable terminal commands, designed for both ai coding agents and human developers. running the cli php resources/bin/tcms options arguments all commands support a --json flag that outputs valid json to stdout. this is the contract ai agents rely on \u2014 no decorative output, no progress bars, no color codes. global options | option | description | |--------|-------------| | --json | output as json for ai agent compatibility | | -v | verbose output | | -q | quiet mode errors only | | -h, --help | display help for a command | | -v, --version | display version | --- site information info show site status, version, edition, license, collection count, and cache backend. tcms info tcms info --json json output: { \"version\": \"3.2.2\", \"build\": \"7f080a63\", \"edition\": \"pro\", \"license\": { \"valid\": true, \"trial\": false, \"trialdaysremaining\": null }, \"domain\": \"example.com\", \"collections\": { \"total\": 12 }, \"schemas\": { \"reserved\": 22, \"custom\": 4 }, \"cache\": { \"backend\": \"apcu\" } } --- schema commands schema:list list all schemas. tcms schema:list tcms schema:list --custom tcms schema:list --reserved tcms schema:list --category=commerce tcms schema:list --json | option | description | |--------|-------------| | --custom | only show custom schemas | | --reserved | only show reserved built-in schemas | | --category | filter by category | schema:get show full schema definition including properties, types, and field configurations. tcms schema:get blog tcms schema:get blog --json | argument | required | description | |----------|----------|-------------| | id | yes | schema id | schema:export export a schema to a json file. tcms schema:export blog --output=blog-schema.json tcms schema:export blog | argument | required | description | |----------|----------|-------------| | id | yes | schema id | | option | description | |--------|-------------| | --output, -o | output file path omit for stdout | schema:import import a schema from a json file. creates or updates the schema. tcms schema:import my-schema.json tcms schema:import my-schema.json --json | argument | required | description | |----------|----------|-------------| | file | yes | path to schema json file | --- collection commands collection:list list all collections with their schema and object count. tcms collection:list tcms collection:list --schema=blog tcms collection:list --category=content tcms collection:list --json | option | description | |--------|-------------| | --schema | filter by schema type | | --category | filter by category | collection:get show collection metadata including schema, sort order, and object count. tcms collection:get blog tcms collection:get blog --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | collection:query query a collection's index with filtering, searching, sorting, and pagination. tcms collection:query posts --search=\"photography\" --limit=5 tcms collection:query posts --include=\"featured:true\" --sort=\"-date\" tcms collection:query posts --exclude=\"draft:true\" --limit=10 --offset=20 tcms collection:query posts --filter=\"title:drone\" --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | option | description | |--------|-------------| | --search, -s | full-text search query | | --filter | contains filter field:value | | --include | include filter field:value,field:value | | --exclude | exclude filter field:value,field:value | | --sort | sort by property prefix with - for descending | | --limit, -l | maximum results default: 20 | | --offset, -o | number of results to skip default: 0 | json output: { \"total\": 37, \"offset\": 0, \"limit\": 5, \"results\": ... } collection:export export a collection to json, csv, or zip. tcms collection:export blog --output=blog.json tcms collection:export blog --format=csv --output=blog.csv tcms collection:export blog --format=zip --output=blog-backup.zip | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | option | description | |--------|-------------| | --format, -f | export format: json , csv , or zip default: json | | --output, -o | output file path omit for stdout; zip generates a default filename | the zip format includes all object json files and their associated media/assets. json export uses streaming for large collections when --output is specified. collection:import import objects into a collection from a json or csv file. tcms collection:import blog posts.json tcms collection:import blog data.csv tcms collection:import blog posts.json --update tcms collection:import blog posts.json --format=json --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | file | yes | path to json or csv file | | option | description | |--------|-------------| | --format, -f | import format: json or csv auto-detected from extension | | --update | update existing objects instead of skipping | --- object commands object:list list object ids in a collection. tcms object:list blog tcms object:list blog --limit=10 --offset=20 tcms object:list blog --json | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | option | description | |--------|-------------| | --limit, -l | maximum results | | --offset, -o | number of results to skip | object:get fetch a single object with all its properties. tcms object:get blog my-post tcms object:get blog my-post --json | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | id | yes | object id | object:export export a single object as json or zip with assets . tcms object:export blog my-post --output=my-post.json tcms object:export blog my-post --format=zip --output=my-post.zip tcms object:export blog my-post | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | id | yes | object id | | option | description | |--------|-------------| | --format, -f | export format: json or zip default: json | | --output, -o | output file path omit for stdout; zip generates a default filename | --- deck commands deck:import import items into a deck property from a json or csv file. tcms deck:import invoices inv-001 items line-items.json tcms deck:import invoices inv-001 items line-items.csv --update | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | object | yes | object id | | property | yes | deck property name | | file | yes | path to json or csv file | | option | description | |--------|-------------| | --format, -f | import format: json or csv auto-detected from extension | | --update | update existing deck items instead of skipping | --- jumpstart commands jumpstart:export export all site data schemas, collections, objects, templates as a jumpstart file. tcms jumpstart:export --output=my-site.json tcms jumpstart:export --name=\"my site\" --description=\"full site export\" tcms jumpstart:export --json | option | description | |--------|-------------| | --name | name for the export | | --description | description for the export | | --output, -o | output file path generates default filename if omitted | jumpstart:import import a jumpstart file to set up schemas, collections, objects, and templates. tcms jumpstart:import my-site.json tcms jumpstart:import my-site.json --json | argument | required | description | |----------|----------|-------------| | file | yes | path to jumpstart json file | --- sync commands push and pull schemas and templates between a local development instance and a production server. configure the production server url and api key in settings > sync in the admin dashboard. push push schemas and templates to the production server. tcms push tcms push --dry-run tcms push --schemas=blog,products tcms push --templates=blog-post,sidebar tcms push --schemas=blog --templates=blog-post --dry-run | option | description | |--------|-------------| | --schemas | comma-separated schema ids to push default: all custom | | --templates | comma-separated template ids to push default: all custom | | --dry-run | preview what would be pushed without sending | pull pull schemas and templates from the production server. tcms pull tcms pull --dry-run tcms pull --schemas=blog tcms pull --templates=blog-post,sidebar | option | description | |--------|-------------| | --schemas | comma-separated schema ids to pull default: all | | --templates | comma-separated template ids to pull default: all | | --dry-run | preview what would be pulled without applying | what gets synced: custom schemas and custom templates only. what never gets synced: content/objects, media/images, system settings, api keys, reserved schemas. --- cache & jobs cache:clear clear all caches. when run from cli, a signal file is written so the web process clears its apcu cache on the next request. tcms cache:clear tcms cache:clear --json jobs:process process the pending job queue. this is typically run via cron. tcms jobs:process tcms jobs:process -v tcms jobs:process --memory=1g tcms jobs:process --json | option | description | |--------|-------------| | --memory, -m | memory limit default: 512m | | -v | verbose output with per-job details | cron setup: php /path/to/resources/bin/tcms jobs:process --- update commands update:check check for available updates from the license server. tcms update:check tcms update:check --json json output: { \"current\": \"3.2.2\", \"available\": true, \"version\": \"3.3.0\", \"releasedate\": \"2026-04-10\", \"severity\": \"minor\", \"changelog\": \"new features and improvements\", \"downloadurl\": \"/version/download/3.3.0\" } update:apply download and apply an available update. the site enters maintenance mode during the swap. tcms update:apply tcms update:apply --force tcms update:apply --json | option | description | |--------|-------------| | --force | skip confirmation prompt | the previous version is backed up automatically for rollback. update:rollback roll back to the previous version after a failed or unwanted update. tcms update:rollback tcms update:rollback --force | option | description | |--------|-------------| | --force | skip confirmation prompt | restores the backup directory created during the most recent update."
+            "content": "cli commands the tcms cli tool is the command-line interface to total cms. it exposes core cms services as composable terminal commands, designed for both ai coding agents and human developers. running the cli php resources/bin/tcms options arguments all commands support a --json flag that outputs valid json to stdout. this is the contract ai agents rely on \u2014 no decorative output, no progress bars, no color codes. global options | option | description | |--------|-------------| | --json | output as json for ai agent compatibility | | -v | verbose output | | -q | quiet mode errors only | | -h, --help | display help for a command | | -v, --version | display version | --- site information info show site status, version, edition, license, collection count, and cache backend. tcms info tcms info --json json output: { \"version\": \"3.2.2\", \"build\": \"7f080a63\", \"edition\": \"pro\", \"license\": { \"valid\": true, \"trial\": false, \"trialdaysremaining\": null }, \"domain\": \"example.com\", \"collections\": { \"total\": 12 }, \"schemas\": { \"reserved\": 22, \"custom\": 4 }, \"cache\": { \"backend\": \"apcu\" } } --- schema commands schema:list list all schemas. tcms schema:list tcms schema:list --custom tcms schema:list --reserved tcms schema:list --category=commerce tcms schema:list --json | option | description | |--------|-------------| | --custom | only show custom schemas | | --reserved | only show reserved built-in schemas | | --category | filter by category | schema:get show full schema definition including properties, types, and field configurations. tcms schema:get blog tcms schema:get blog --json | argument | required | description | |----------|----------|-------------| | id | yes | schema id | schema:export export a schema to a json file. tcms schema:export blog --output=blog-schema.json tcms schema:export blog | argument | required | description | |----------|----------|-------------| | id | yes | schema id | | option | description | |--------|-------------| | --output, -o | output file path omit for stdout | schema:import import a schema from a json file. creates or updates the schema. tcms schema:import my-schema.json tcms schema:import my-schema.json --json | argument | required | description | |----------|----------|-------------| | file | yes | path to schema json file | --- collection commands collection:list list all collections with their schema and object count. tcms collection:list tcms collection:list --schema=blog tcms collection:list --category=content tcms collection:list --json | option | description | |--------|-------------| | --schema | filter by schema type | | --category | filter by category | collection:get show collection metadata including schema, sort order, and object count. tcms collection:get blog tcms collection:get blog --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | collection:query query a collection's index with filtering, searching, sorting, and pagination. tcms collection:query posts --search=\"photography\" --limit=5 tcms collection:query posts --include=\"featured:true\" --sort=\"-date\" tcms collection:query posts --exclude=\"draft:true\" --limit=10 --offset=20 tcms collection:query posts --filter=\"title:drone\" --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | option | description | |--------|-------------| | --search, -s | full-text search query | | --filter | contains filter field:value | | --include | include filter field:value,field:value | | --exclude | exclude filter field:value,field:value | | --sort | sort by property prefix with - for descending | | --limit, -l | maximum results default: 20 | | --offset, -o | number of results to skip default: 0 | json output: { \"total\": 37, \"offset\": 0, \"limit\": 5, \"results\": ... } collection:export export a collection to json, csv, or zip. tcms collection:export blog --output=blog.json tcms collection:export blog --format=csv --output=blog.csv tcms collection:export blog --format=zip --output=blog-backup.zip | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | option | description | |--------|-------------| | --format, -f | export format: json , csv , or zip default: json | | --output, -o | output file path omit for stdout; zip generates a default filename | the zip format includes all object json files and their associated media/assets. json export uses streaming for large collections when --output is specified. collection:import import objects into a collection from a json or csv file. tcms collection:import blog posts.json tcms collection:import blog data.csv tcms collection:import blog posts.json --update tcms collection:import blog posts.json --format=json --json | argument | required | description | |----------|----------|-------------| | id | yes | collection id | | file | yes | path to json or csv file | | option | description | |--------|-------------| | --format, -f | import format: json or csv auto-detected from extension | | --update | update existing objects instead of skipping | --- object commands object:list list object ids in a collection. tcms object:list blog tcms object:list blog --limit=10 --offset=20 tcms object:list blog --json | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | option | description | |--------|-------------| | --limit, -l | maximum results | | --offset, -o | number of results to skip | object:get fetch a single object with all its properties. tcms object:get blog my-post tcms object:get blog my-post --json | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | id | yes | object id | object:export export a single object as json or zip with assets . tcms object:export blog my-post --output=my-post.json tcms object:export blog my-post --format=zip --output=my-post.zip tcms object:export blog my-post | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | id | yes | object id | | option | description | |--------|-------------| | --format, -f | export format: json or zip default: json | | --output, -o | output file path omit for stdout; zip generates a default filename | --- deck commands deck:import import items into a deck property from a json or csv file. tcms deck:import invoices inv-001 items line-items.json tcms deck:import invoices inv-001 items line-items.csv --update | argument | required | description | |----------|----------|-------------| | collection | yes | collection id | | object | yes | object id | | property | yes | deck property name | | file | yes | path to json or csv file | | option | description | |--------|-------------| | --format, -f | import format: json or csv auto-detected from extension | | --update | update existing deck items instead of skipping | --- jumpstart commands jumpstart:export export all site data schemas, collections, objects, templates as a jumpstart file. tcms jumpstart:export --output=my-site.json tcms jumpstart:export --name=\"my site\" --description=\"full site export\" tcms jumpstart:export --json | option | description | |--------|-------------| | --name | name for the export | | --description | description for the export | | --output, -o | output file path generates default filename if omitted | jumpstart:import import a jumpstart file to set up schemas, collections, objects, and templates. tcms jumpstart:import my-site.json tcms jumpstart:import my-site.json --json | argument | required | description | |----------|----------|-------------| | file | yes | path to jumpstart json file | --- sync commands push and pull schemas and templates between a local development instance and a production server. configure the production server url and api key in settings > sync in the admin dashboard. push push schemas and templates to the production server. tcms push tcms push --dry-run tcms push --schemas=blog,products tcms push --templates=blog-post,sidebar tcms push --schemas=blog --templates=blog-post --dry-run | option | description | |--------|-------------| | --schemas | comma-separated schema ids to push default: all custom | | --templates | comma-separated template ids to push default: all custom | | --dry-run | preview what would be pushed without sending | pull pull schemas and templates from the production server. tcms pull tcms pull --dry-run tcms pull --schemas=blog tcms pull --templates=blog-post,sidebar | option | description | |--------|-------------| | --schemas | comma-separated schema ids to pull default: all | | --templates | comma-separated template ids to pull default: all | | --dry-run | preview what would be pulled without applying | what gets synced: custom schemas and custom templates only. what never gets synced: content/objects, media/images, system settings, api keys, reserved schemas. --- cache & jobs cache:clear clear all caches. when run from cli, a signal file is written so the web process clears its apcu cache on the next request. tcms cache:clear tcms cache:clear --json jobs:process process the pending job queue. this is typically run via cron. tcms jobs:process tcms jobs:process -v tcms jobs:process --memory=1g tcms jobs:process --json | option | description | |--------|-------------| | --memory, -m | memory limit default: 512m | | -v | verbose output with per-job details | cron setup: php /path/to/resources/bin/tcms jobs:process --- update commands update:check check for available updates from the license server. tcms update:check tcms update:check --json json output: { \"current\": \"3.2.2\", \"available\": true, \"version\": \"3.3.0\", \"releasedate\": \"2026-04-10\", \"severity\": \"minor\", \"changelog\": \"new features and improvements\", \"downloadurl\": \"/version/download/3.3.0\" } update:apply download and apply an available update. the site enters maintenance mode during the swap. tcms update:apply tcms update:apply --force tcms update:apply --json | option | description | |--------|-------------| | --force | skip confirmation prompt | the previous version is backed up automatically for rollback. update:rollback roll back to the previous version after a failed or unwanted update. tcms update:rollback tcms update:rollback --force | option | description | |--------|-------------| | --force | skip confirmation prompt | restores the backup directory created during the most recent update.",
+            "since": "3.3.0"
         },
         {
             "title": "Migration of Total CMS v1 Data",
@@ -164,7 +165,8 @@
                 "Alternative: Git / Source Control",
                 "Troubleshooting"
             ],
-            "content": "sync sync lets you push schemas and templates from a local development instance to a production server, or pull them from production to your local environment. this enables a proper development workflow where you build and test locally, then deploy structural changes to production without touching content or media. what gets synced - custom schemas .schemas/ directory - custom templates what never gets synced - collection content and objects - media files and images - system settings - api keys - reserved built-in schemas setup 1. create an api key on the production server on your production total cms instance: 1. go to utilities > api keys 2. create a new key with get and post permissions 3. set the endpoint pattern to /export/ and /import/ 4. copy the generated api key 2. configure sync settings on your local total cms instance: 1. go to settings > sync 2. enter the production server's api url e.g., 3. paste the api key from step 1 4. save using the dashboard go to utilities > sync manager to push or pull using the admin interface. - select all syncs every custom schema and template - uncheck select all to pick individual schemas and templates - click push to production to send your local changes to the remote server - click pull from production to download remote schemas and templates to your local instance - both actions show a confirmation dialog before proceeding using the cli the cli provides push and pull commands that read the same sync settings from the dashboard. push push all schemas and templates tcms push push specific schemas only tcms push --schemas=blog,products push specific templates only tcms push --templates=blog-post,sidebar combine filters tcms push --schemas=blog --templates=blog-post preview without sending tcms push --dry-run json output for scripting tcms push --json pull pull all schemas and templates tcms pull pull specific items tcms pull --schemas=products tcms pull --templates=blog-post,sidebar preview without applying tcms pull --dry-run json output tcms pull --json dry run both push and pull support --dry-run which shows what would be synced without making any changes. this is useful for verifying your filters before running the actual sync. tcms push --dry-run dry run \u2014 would push to schemas: - products - invoice templates: - blog-post - sidebar how it works sync is built on top of total cms's jumpstart system. when you push: 1. the local instance exports selected schemas and templates as a jumpstart payload 2. the payload is sent to the production server's /import/jumpstart endpoint 3. the production server imports the schemas and templates, overwriting any existing versions when you pull, the process is reversed \u2014 the production server exports its schemas and templates, and the local instance imports them. overwrite behavior sync always overwrites existing schemas and templates on the target. if a schema or template with the same id already exists, it will be replaced with the synced version. this is intentional \u2014 sync is designed for deploying known changes, not merging. alternative: git / source control if your tcms-data/ directory is tracked in version control, git itself is an effective way to keep schemas and templates in sync between environments. schemas live in tcms-data/.schemas/ as json files, and templates live in tcms-data/templates/ as twig files \u2014 both are plain text and diff cleanly. a typical git-based workflow: 1. make schema and template changes locally 2. commit to your branch 3. push to remote and deploy to production 4. run tcms cache:clear on production after deployment this approach works well for teams that already have a git-based deployment pipeline. the built-in sync feature is designed for workflows where direct file access to the production server isn't available \u2014 for example, when t3 is hosted on a managed server and you only have access through the admin dashboard and api. both approaches can coexist. use git for your primary deployment workflow, and sync for quick one-off pushes when you need to update a schema without a full deployment. troubleshooting \"sync not configured\" \u2014 set the production url and api key in settings > sync. push fails with http 401 \u2014 the api key is invalid or doesn't have the required permissions. verify the key on the production server has get and post access to /export/ and /import/ . push fails with http 404 \u2014 the production server url may be incorrect. make sure it points to the total cms api root e.g., , not the site root. connection timeout \u2014 the production server may be unreachable from your local environment. check network connectivity and firewall rules."
+            "content": "sync sync lets you push schemas and templates from a local development instance to a production server, or pull them from production to your local environment. this enables a proper development workflow where you build and test locally, then deploy structural changes to production without touching content or media. what gets synced - custom schemas .schemas/ directory - custom templates what never gets synced - collection content and objects - media files and images - system settings - api keys - reserved built-in schemas setup 1. create an api key on the production server on your production total cms instance: 1. go to utilities > api keys 2. create a new key with get and post permissions 3. set the endpoint pattern to /export/ and /import/ 4. copy the generated api key 2. configure sync settings on your local total cms instance: 1. go to settings > sync 2. enter the production server's api url e.g., 3. paste the api key from step 1 4. save using the dashboard go to utilities > sync manager to push or pull using the admin interface. - select all syncs every custom schema and template - uncheck select all to pick individual schemas and templates - click push to production to send your local changes to the remote server - click pull from production to download remote schemas and templates to your local instance - both actions show a confirmation dialog before proceeding using the cli the cli provides push and pull commands that read the same sync settings from the dashboard. push push all schemas and templates tcms push push specific schemas only tcms push --schemas=blog,products push specific templates only tcms push --templates=blog-post,sidebar combine filters tcms push --schemas=blog --templates=blog-post preview without sending tcms push --dry-run json output for scripting tcms push --json pull pull all schemas and templates tcms pull pull specific items tcms pull --schemas=products tcms pull --templates=blog-post,sidebar preview without applying tcms pull --dry-run json output tcms pull --json dry run both push and pull support --dry-run which shows what would be synced without making any changes. this is useful for verifying your filters before running the actual sync. tcms push --dry-run dry run \u2014 would push to schemas: - products - invoice templates: - blog-post - sidebar how it works sync is built on top of total cms's jumpstart system. when you push: 1. the local instance exports selected schemas and templates as a jumpstart payload 2. the payload is sent to the production server's /import/jumpstart endpoint 3. the production server imports the schemas and templates, overwriting any existing versions when you pull, the process is reversed \u2014 the production server exports its schemas and templates, and the local instance imports them. overwrite behavior sync always overwrites existing schemas and templates on the target. if a schema or template with the same id already exists, it will be replaced with the synced version. this is intentional \u2014 sync is designed for deploying known changes, not merging. alternative: git / source control if your tcms-data/ directory is tracked in version control, git itself is an effective way to keep schemas and templates in sync between environments. schemas live in tcms-data/.schemas/ as json files, and templates live in tcms-data/templates/ as twig files \u2014 both are plain text and diff cleanly. a typical git-based workflow: 1. make schema and template changes locally 2. commit to your branch 3. push to remote and deploy to production 4. run tcms cache:clear on production after deployment this approach works well for teams that already have a git-based deployment pipeline. the built-in sync feature is designed for workflows where direct file access to the production server isn't available \u2014 for example, when t3 is hosted on a managed server and you only have access through the admin dashboard and api. both approaches can coexist. use git for your primary deployment workflow, and sync for quick one-off pushes when you need to update a schema without a full deployment. troubleshooting \"sync not configured\" \u2014 set the production url and api key in settings > sync. push fails with http 401 \u2014 the api key is invalid or doesn't have the required permissions. verify the key on the production server has get and post access to /export/ and /import/ . push fails with http 404 \u2014 the production server url may be incorrect. make sure it points to the total cms api root e.g., , not the site root. connection timeout \u2014 the production server may be unreachable from your local environment. check network connectivity and firewall rules.",
+            "since": "3.3.0"
         },
         {
             "title": "Data Model",
@@ -204,7 +206,8 @@
                 "Version Severity",
                 "Troubleshooting"
             ],
-            "content": "updates total cms includes a built-in update system that checks for new versions and applies them with minimal downtime. how updates work 1. total cms periodically checks the license server for new versions cached for 24 hours 2. when an update is available, a notification appears in the admin dashboard 3. you can apply the update with one click or via the cli 4. during the update, the site briefly enters maintenance mode 5. the previous version is backed up for rollback if needed updates only replace the application files tcms/ . your content in tcms-data/ is never touched. checking for updates dashboard go to utilities > update manager to see your current version and check for available updates. click \"check for updates\" to force a fresh check. cli check for available updates tcms update:check json output for scripting tcms update:check --json applying updates dashboard 1. go to utilities > update manager 2. review the available version, severity, and changelog 3. click \"update to x.x.x\" 4. confirm the update 5. wait for the update to complete \u2014 the page reloads automatically cli apply the update interactive confirmation tcms update:apply skip confirmation tcms update:apply --force json output tcms update:apply --json update process when an update is applied: 1. the update zip is downloaded from the update server 2. the zip is verified as a valid archive 3. the site enters maintenance mode \u2014 visitors see a \"updating...\" page 4. the current application directory is backed up e.g., tcms.backup-3.2.2-20260410-143022/ 5. the new files are extracted into place 6. all caches are cleared 7. maintenance mode is disabled 8. the update is logged to tcms-data/.system/updates.log the entire process typically takes a few seconds. maintenance mode during an update, non-admin visitors see a static \"updating total cms\" page with a 503 status code. the page auto-refreshes after 10 seconds. admin routes continue to work during maintenance so the update action can complete. rollback if an update causes issues, you can roll back to the previous version: cli roll back to the previous version tcms update:rollback skip confirmation tcms update:rollback --force rollback restores the backup directory that was created during the update. only the most recent backup is available. manual rollback if the cli isn't working after a failed update, you can manually swap directories: from the parent directory of your tcms installation mv tcms tcms-failed mv tcms.backup-3.2.2-20260410-143022 tcms php tcms/resources/bin/tcms cache:clear version severity updates are classified by severity: - patch e.g., 3.2.1 \u2192 3.2.2 \u2014 bug fixes and minor improvements. safe to apply immediately. - minor e.g., 3.2.x \u2192 3.3.0 \u2014 new features and enhancements. review the changelog before applying. - major e.g., 3.x \u2192 4.0 \u2014 significant changes that may require attention. read the upgrade guide. troubleshooting \"already up to date\" \u2014 the update check is cached for 24 hours. use tcms update:check to force a fresh check from the cli. update download fails \u2014 verify the server can make outbound https connections to license.totalcms.co . check firewall rules and dns resolution. update fails mid-process \u2014 the previous version is automatically backed up before the swap. use tcms update:rollback or manually restore the backup directory. site stuck in maintenance mode \u2014 the maintenance flag is at cache/maintenance.flag . delete it manually: rm cache/maintenance.flag permission errors during update \u2014 the php process needs write access to the application directory to perform the swap. check file ownership and permissions."
+            "content": "updates total cms includes a built-in update system that checks for new versions and applies them with minimal downtime. how updates work 1. total cms periodically checks the license server for new versions cached for 24 hours 2. when an update is available, a notification appears in the admin dashboard 3. you can apply the update with one click or via the cli 4. during the update, the site briefly enters maintenance mode 5. the previous version is backed up for rollback if needed updates only replace the application files tcms/ . your content in tcms-data/ is never touched. checking for updates dashboard go to utilities > update manager to see your current version and check for available updates. click \"check for updates\" to force a fresh check. cli check for available updates tcms update:check json output for scripting tcms update:check --json applying updates dashboard 1. go to utilities > update manager 2. review the available version, severity, and changelog 3. click \"update to x.x.x\" 4. confirm the update 5. wait for the update to complete \u2014 the page reloads automatically cli apply the update interactive confirmation tcms update:apply skip confirmation tcms update:apply --force json output tcms update:apply --json update process when an update is applied: 1. the update zip is downloaded from the update server 2. the zip is verified as a valid archive 3. the site enters maintenance mode \u2014 visitors see a \"updating...\" page 4. the current application directory is backed up e.g., tcms.backup-3.2.2-20260410-143022/ 5. the new files are extracted into place 6. all caches are cleared 7. maintenance mode is disabled 8. the update is logged to tcms-data/.system/updates.log the entire process typically takes a few seconds. maintenance mode during an update, non-admin visitors see a static \"updating total cms\" page with a 503 status code. the page auto-refreshes after 10 seconds. admin routes continue to work during maintenance so the update action can complete. rollback if an update causes issues, you can roll back to the previous version: cli roll back to the previous version tcms update:rollback skip confirmation tcms update:rollback --force rollback restores the backup directory that was created during the update. only the most recent backup is available. manual rollback if the cli isn't working after a failed update, you can manually swap directories: from the parent directory of your tcms installation mv tcms tcms-failed mv tcms.backup-3.2.2-20260410-143022 tcms php tcms/resources/bin/tcms cache:clear version severity updates are classified by severity: - patch e.g., 3.2.1 \u2192 3.2.2 \u2014 bug fixes and minor improvements. safe to apply immediately. - minor e.g., 3.2.x \u2192 3.3.0 \u2014 new features and enhancements. review the changelog before applying. - major e.g., 3.x \u2192 4.0 \u2014 significant changes that may require attention. read the upgrade guide. troubleshooting \"already up to date\" \u2014 the update check is cached for 24 hours. use tcms update:check to force a fresh check from the cli. update download fails \u2014 verify the server can make outbound https connections to license.totalcms.co . check firewall rules and dns resolution. update fails mid-process \u2014 the previous version is automatically backed up before the swap. use tcms update:rollback or manually restore the backup directory. site stuck in maintenance mode \u2014 the maintenance flag is at cache/maintenance.flag . delete it manually: rm cache/maintenance.flag permission errors during update \u2014 the php process needs write access to the application directory to perform the swap. check file ownership and permissions.",
+            "since": "3.3.0"
         },
         {
             "title": "Total CMS Security Guide",
@@ -4018,7 +4021,8 @@
                 "tcms info\ntcms info --json",
                 "{\n    \"version\": \"3.2.2\",\n    \"build\": \"7f080a63\",\n    \"edition\": \"pro\",\n    \"license\": { \"valid\": true, \"trial\": false, \"trialDaysRemaining\": null },\n    \"domain\": \"example.com\",\n    \"collections\": { \"total\": 12 },\n    \"schemas\": { \"reserved\": 22, \"custom\": 4 },\n    \"cache\": { \"backend\": \"apcu\" }\n}"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "schema:list",
@@ -4041,7 +4045,8 @@
             "examples": [
                 "tcms schema:list\ntcms schema:list --custom\ntcms schema:list --reserved\ntcms schema:list --category=Commerce\ntcms schema:list --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "schema:get",
@@ -4057,7 +4062,8 @@
             "examples": [
                 "tcms schema:get blog\ntcms schema:get blog --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "schema:export",
@@ -4078,7 +4084,8 @@
             "examples": [
                 "tcms schema:export blog --output=blog-schema.json\ntcms schema:export blog"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "schema:import",
@@ -4094,7 +4101,8 @@
             "examples": [
                 "tcms schema:import my-schema.json\ntcms schema:import my-schema.json --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "collection:list",
@@ -4113,7 +4121,8 @@
             "examples": [
                 "tcms collection:list\ntcms collection:list --schema=blog\ntcms collection:list --category=Content\ntcms collection:list --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "collection:get",
@@ -4129,7 +4138,8 @@
             "examples": [
                 "tcms collection:get blog\ntcms collection:get blog --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "collection:query",
@@ -4175,7 +4185,8 @@
                 "tcms collection:query posts --search=\"photography\" --limit=5\ntcms collection:query posts --include=\"featured:true\" --sort=\"-date\"\ntcms collection:query posts --exclude=\"draft:true\" --limit=10 --offset=20\ntcms collection:query posts --filter=\"title:drone\" --json",
                 "{\n    \"total\": 37,\n    \"offset\": 0,\n    \"limit\": 5,\n    \"results\": [...]\n}"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "collection:export",
@@ -4200,7 +4211,8 @@
             "examples": [
                 "tcms collection:export blog --output=blog.json\ntcms collection:export blog --format=csv --output=blog.csv\ntcms collection:export blog --format=zip --output=blog-backup.zip"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "collection:import",
@@ -4230,7 +4242,8 @@
             "examples": [
                 "tcms collection:import blog posts.json\ntcms collection:import blog data.csv\ntcms collection:import blog posts.json --update\ntcms collection:import blog posts.json --format=json --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "object:list",
@@ -4255,7 +4268,8 @@
             "examples": [
                 "tcms object:list blog\ntcms object:list blog --limit=10 --offset=20\ntcms object:list blog --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "object:get",
@@ -4276,7 +4290,8 @@
             "examples": [
                 "tcms object:get blog my-post\ntcms object:get blog my-post --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "object:export",
@@ -4306,7 +4321,8 @@
             "examples": [
                 "tcms object:export blog my-post --output=my-post.json\ntcms object:export blog my-post --format=zip --output=my-post.zip\ntcms object:export blog my-post"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "deck:import",
@@ -4346,7 +4362,8 @@
             "examples": [
                 "tcms deck:import invoices inv-001 items line-items.json\ntcms deck:import invoices inv-001 items line-items.csv --update"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "jumpstart:export",
@@ -4369,7 +4386,8 @@
             "examples": [
                 "tcms jumpstart:export --output=my-site.json\ntcms jumpstart:export --name=\"My Site\" --description=\"Full site export\"\ntcms jumpstart:export --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "jumpstart:import",
@@ -4385,7 +4403,8 @@
             "examples": [
                 "tcms jumpstart:import my-site.json\ntcms jumpstart:import my-site.json --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "push",
@@ -4408,7 +4427,8 @@
             "examples": [
                 "tcms push\ntcms push --dry-run\ntcms push --schemas=blog,products\ntcms push --templates=blog-post,sidebar\ntcms push --schemas=blog --templates=blog-post --dry-run"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "pull",
@@ -4431,7 +4451,8 @@
             "examples": [
                 "tcms pull\ntcms pull --dry-run\ntcms pull --schemas=blog\ntcms pull --templates=blog-post,sidebar"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "cache:clear",
@@ -4441,7 +4462,8 @@
             "examples": [
                 "tcms cache:clear\ntcms cache:clear --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "jobs:process",
@@ -4457,7 +4479,8 @@
                 "tcms jobs:process\ntcms jobs:process -v\ntcms jobs:process --memory=1G\ntcms jobs:process --json",
                 "* * * * * php /path/to/resources/bin/tcms jobs:process"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "update:check",
@@ -4468,7 +4491,8 @@
                 "tcms update:check\ntcms update:check --json",
                 "{\n    \"current\": \"3.2.2\",\n    \"available\": true,\n    \"version\": \"3.3.0\",\n    \"releaseDate\": \"2026-04-10\",\n    \"severity\": \"minor\",\n    \"changelog\": \"New features and improvements\",\n    \"downloadUrl\": \"/version/download/3.3.0\"\n}"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "update:apply",
@@ -4483,7 +4507,8 @@
             "examples": [
                 "tcms update:apply\ntcms update:apply --force\ntcms update:apply --json"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         },
         {
             "name": "update:rollback",
@@ -4498,7 +4523,8 @@
             "examples": [
                 "tcms update:rollback\ntcms update:rollback --force"
             ],
-            "url": "https://docs.totalcms.co/advanced/cli/"
+            "url": "https://docs.totalcms.co/advanced/cli/",
+            "since": "3.3.0"
         }
     ],
     "extension_api": {
