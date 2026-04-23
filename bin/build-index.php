@@ -917,9 +917,44 @@ function buildExtensionApiReference(): array
 				'payload'     => ['collection' => 'string', 'id' => 'string'],
 			],
 			[
+				'name'        => 'collection.created',
+				'description' => 'Fired after a new collection is created',
+				'payload'     => ['collection' => 'string'],
+			],
+			[
+				'name'        => 'collection.deleted',
+				'description' => 'Fired after a collection is deleted',
+				'payload'     => ['collection' => 'string'],
+			],
+			[
 				'name'        => 'schema.saved',
 				'description' => 'Fired after a schema is created or updated',
 				'payload'     => ['schema' => 'string'],
+			],
+			[
+				'name'        => 'schema.deleted',
+				'description' => 'Fired after a schema is deleted',
+				'payload'     => ['schema' => 'string'],
+			],
+			[
+				'name'        => 'user.login',
+				'description' => 'Fired after a user successfully logs in',
+				'payload'     => ['user' => 'string'],
+			],
+			[
+				'name'        => 'user.logout',
+				'description' => 'Fired after a user logs out',
+				'payload'     => ['user' => 'string'],
+			],
+			[
+				'name'        => 'extension.enabled',
+				'description' => 'Fired after an extension is enabled',
+				'payload'     => ['id' => 'string'],
+			],
+			[
+				'name'        => 'extension.disabled',
+				'description' => 'Fired after an extension is disabled',
+				'payload'     => ['id' => 'string'],
 			],
 		],
 		'permissions' => [
