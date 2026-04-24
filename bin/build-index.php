@@ -209,6 +209,19 @@ if (file_exists($settingsFile)) {
 	$content = file_get_contents($settingsFile);
 	$schemaConfig = parseSchemaConfig($content);
 }
+
+// Also parse schema-level settings from schemas/reference.md
+$schemaRefFile = $docsDir . '/schemas/reference.md';
+if (file_exists($schemaRefFile)) {
+	$content = file_get_contents($schemaRefFile);
+	$schemaRefConfigs = parseSchemaConfig($content);
+	// Override URL to point to the schema reference page
+	foreach ($schemaRefConfigs as &$cfg) {
+		$cfg['url'] = 'https://docs.totalcms.co/schemas/reference/';
+	}
+	unset($cfg);
+	$schemaConfig = array_merge($schemaConfig, $schemaRefConfigs);
+}
 echo "  Schema config options: " . count($schemaConfig) . "\n";
 
 // -------------------------------------------------------
@@ -586,6 +599,11 @@ function parseSchemaConfig(string $content): array
 
 		// Skip headings that look like prose rather than config keys
 		if (str_contains($key, ' ') && strlen($key) > 30) {
+			continue;
+		}
+
+		// Skip headings that are markdown artifacts (e.g. "# Title")
+		if (str_starts_with($key, '#')) {
 			continue;
 		}
 
