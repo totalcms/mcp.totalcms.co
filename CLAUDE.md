@@ -43,7 +43,9 @@ https://mcp.totalcms.test
 | `docs_field_type` | Look up field type configuration |
 | `docs_api_endpoint` | Look up REST API endpoints |
 | `docs_schema_config` | Look up schema/collection config |
-| `docs_cli_command` | CLI commands (stub — CLI in development) |
+| `docs_cli_command` | CLI commands |
+| `docs_extension` | Extension API: context methods, events, permissions, manifest fields |
+| `docs_builder` | Site Builder: page schema, twig functions, assets, starters, routing |
 
 ## Documentation Source
 

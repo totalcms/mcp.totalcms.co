@@ -491,4 +491,144 @@ class DocsTools
 			'url'   => $api['url'] ?? 'https://docs.totalcms.co/extensions/overview/',
 		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
 	}
+
+	/**
+	 * Look up the Total CMS Site Builder reference. Use this when helping users
+	 * build site templates, page routes, navigation menus, or asset pipelines.
+	 *
+	 * Use category queries to get a coherent slice of the builder API:
+	 * - "overview"  — what the Site Builder is and how routing works
+	 * - "schema"    — the builder-page schema fields (use when creating page objects)
+	 * - "templates" — directory structure (layouts/, pages/, partials/, macros/) and template_data variables
+	 * - "twig"      — cms.builder.* twig functions (nav, asset, css, js, etc.)
+	 * - "assets"    — asset path config and Vite/esbuild manifest convention
+	 * - "starters"  — bundled starter templates (minimal, business, blog, portfolio)
+	 * - "cli"       — builder:init scaffolding command
+	 * - "routes"    — static and dynamic route patterns, and collection URL routing
+	 *
+	 * Or query by a specific identifier — a twig function name (e.g. "cms.builder.nav"),
+	 * a starter id (e.g. "blog"), a page schema field (e.g. "route"), or a CLI command.
+	 */
+	#[McpTool(
+		name: 'docs_builder',
+		description: 'Look up Total CMS Site Builder details: page schema, directory structure, twig functions, asset pipeline, starter templates, CLI commands, and route patterns. Use this when helping users build site templates and frontends. Examples: docs_builder("overview"), docs_builder("schema"), docs_builder("twig"), docs_builder("starters"), docs_builder("cms.builder.nav"), docs_builder("blog")',
+		annotations: new ToolAnnotations(readOnlyHint: true),
+	)]
+	public function builder(string $query): string
+	{
+		$query = strtolower(trim($query));
+		$api   = $this->index['builder_api'] ?? [];
+
+		if ($api === []) {
+			return json_encode(['error' => 'Site Builder API index not available. Rebuild the index.'], JSON_THROW_ON_ERROR);
+		}
+
+		$versionNote = $api['min_version'] ?? null;
+
+		// Empty query → return the high-level summary
+		if ($query === '' || $query === 'overview' || $query === 'help') {
+			return json_encode([
+				'min_version'       => $versionNote,
+				'note'              => $api['note'] ?? '',
+				'overview'          => $api['overview'] ?? '',
+				'pages_collection'  => $api['pages_collection'] ?? '',
+				'docs'              => $api['docs'] ?? [],
+				'next_steps'        => 'Query a category for details: schema, templates, twig, assets, starters, cli, routes',
+			], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+
+		// Category queries
+		$categories = [
+			'schema'      => ['page_schema'],
+			'page'        => ['page_schema'],
+			'pages'       => ['page_schema', 'pages_collection'],
+			'templates'   => ['directory_structure', 'template_data'],
+			'directory'   => ['directory_structure'],
+			'data'        => ['template_data'],
+			'twig'        => ['twig_functions'],
+			'functions'   => ['twig_functions'],
+			'assets'      => ['asset_config'],
+			'asset'       => ['asset_config'],
+			'starters'    => ['starters'],
+			'starter'     => ['starters'],
+			'cli'         => ['cli_commands'],
+			'commands'    => ['cli_commands'],
+			'routes'      => ['route_patterns', 'collection_url_routing'],
+			'routing'     => ['route_patterns', 'collection_url_routing'],
+		];
+
+		if (isset($categories[$query])) {
+			$result = ['min_version' => $versionNote];
+			foreach ($categories[$query] as $key) {
+				if (isset($api[$key])) {
+					$result[$key] = $api[$key];
+				}
+			}
+			return json_encode($result, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+
+		// Specific lookups: twig function by name
+		foreach ($api['twig_functions'] ?? [] as $fn) {
+			if (strtolower($fn['name']) === $query) {
+				return json_encode([...$fn, 'min_version' => $versionNote], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Page schema field by name
+		foreach ($api['page_schema']['fields'] ?? [] as $field) {
+			if (strtolower($field['name']) === $query) {
+				return json_encode([
+					'type'              => 'page_schema_field',
+					'field'             => $field,
+					'pages_collection'  => $api['pages_collection'] ?? '',
+					'min_version'       => $versionNote,
+				], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Starter by id
+		foreach ($api['starters'] ?? [] as $starter) {
+			if (strtolower($starter['id']) === $query) {
+				return json_encode([...$starter, 'cli' => 'tcms builder:init ' . $starter['id'], 'min_version' => $versionNote], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// CLI command by name
+		foreach ($api['cli_commands'] ?? [] as $cmd) {
+			if (strtolower($cmd['name']) === $query) {
+				return json_encode([...$cmd, 'min_version' => $versionNote], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Partial matches across functions, fields, starters
+		$matches = [];
+		foreach ($api['twig_functions'] ?? [] as $fn) {
+			if (str_contains(strtolower($fn['name']), $query) || str_contains(strtolower($fn['description']), $query)) {
+				$matches[] = ['type' => 'twig_function', ...$fn];
+			}
+		}
+		foreach ($api['page_schema']['fields'] ?? [] as $field) {
+			if (str_contains(strtolower($field['name']), $query) || str_contains(strtolower($field['description']), $query)) {
+				$matches[] = ['type' => 'page_schema_field', ...$field];
+			}
+		}
+		foreach ($api['starters'] ?? [] as $starter) {
+			if (str_contains(strtolower($starter['id']), $query) || str_contains(strtolower($starter['description']), $query)) {
+				$matches[] = ['type' => 'starter', ...$starter];
+			}
+		}
+
+		if (!empty($matches)) {
+			return json_encode([
+				'message' => "No exact match for '{$query}'. Related results:",
+				'matches' => $matches,
+			], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+
+		return json_encode([
+			'error' => "No Site Builder match for '{$query}'.",
+			'hint'  => 'Try a category — "overview", "schema", "templates", "twig", "assets", "starters", "cli", or "routes" — or a specific name like "cms.builder.nav", "route", or "blog".',
+			'url'   => $api['url'] ?? 'https://docs.totalcms.co/builder/overview/',
+		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+	}
 }

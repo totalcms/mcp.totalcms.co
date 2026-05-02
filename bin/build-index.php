@@ -121,6 +121,7 @@ $twigNamespaceFiles = [
 	'twig/variables.md',
 	'twig/totalcms.md',
 	'twig/auth.md',
+	'twig/builder.md',
 	'twig/forms.md',
 	'twig/forms/builder.md',
 	'twig/forms/overview.md',
@@ -228,10 +229,19 @@ echo "  Schema config options: " . count($schemaConfig) . "\n";
 // Parse CLI commands from cli/commands.md
 // -------------------------------------------------------
 $cliCommands = [];
-$cliFile = $docsDir . '/advanced/cli.md';
-if (file_exists($cliFile)) {
-	$content = file_get_contents($cliFile);
-	$cliCommands = parseCliCommands($content);
+$cliSourceFiles = [
+	'advanced/cli.md',
+	'builder/cli.md',
+];
+foreach ($cliSourceFiles as $relPath) {
+	$filePath = $docsDir . '/' . $relPath;
+	if (!file_exists($filePath)) {
+		continue;
+	}
+	$content    = file_get_contents($filePath);
+	$pageUrl    = 'https://docs.totalcms.co/' . str_replace('.md', '/', $relPath);
+	$parsedCmds = parseCliCommands($content, $pageUrl);
+	$cliCommands = array_merge($cliCommands, $parsedCmds);
 }
 echo "  CLI commands: " . count($cliCommands) . "\n";
 
@@ -239,6 +249,7 @@ echo "  CLI commands: " . count($cliCommands) . "\n";
 // Build the final index
 // -------------------------------------------------------
 $extensionApi = buildExtensionApiReference();
+$builderApi   = buildBuilderApiReference();
 
 $index = [
 	'version'        => '1.0.0',
@@ -251,6 +262,7 @@ $index = [
 	'schema_config'  => $schemaConfig,
 	'cli_commands'   => $cliCommands,
 	'extension_api'  => $extensionApi,
+	'builder_api'    => $builderApi,
 ];
 
 $json = json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -714,7 +726,7 @@ function extractCodeBlocks(string $section): array
  *
  * @return array<int, array<string, mixed>>
  */
-function parseCliCommands(string $content): array
+function parseCliCommands(string $content, string $url = 'https://docs.totalcms.co/advanced/cli/'): array
 {
 	$commands = [];
 	$frontmatter = parseFrontmatter($content);
@@ -772,7 +784,7 @@ function parseCliCommands(string $content): array
 			'arguments'   => $arguments,
 			'options'     => $options,
 			'examples'    => $examples,
-			'url'         => 'https://docs.totalcms.co/advanced/cli/',
+			'url'         => $url,
 		];
 
 		if ($pageSince !== null) {
@@ -827,7 +839,12 @@ function buildExtensionApiReference(): array
 				'signature'   => 'setting(string $key, mixed $default = null): mixed',
 				'description' => 'Get a single extension setting value',
 				'phase'       => 'both',
-				'permission'  => 'settings:read',
+			],
+			[
+				'name'        => 'logger',
+				'signature'   => 'logger(): \\Psr\\Log\\LoggerInterface',
+				'description' => 'Get the shared extensions logger (writes to tcms-data/logs/extensions.log on the "extensions" channel). Prefix messages with the extension id so multi-extension logs remain readable.',
+				'phase'       => 'both',
 			],
 			[
 				'name'        => 'get',
@@ -919,10 +936,10 @@ function buildExtensionApiReference(): array
 			],
 			[
 				'name'        => 'addFieldType',
-				'signature'   => 'addFieldType(string $typeName, string $fqcn): void',
-				'description' => 'Register a custom field type. Class must extend FormField.',
+				'signature'   => 'addFieldType(string $typeName, string $fqcn, string $defaultType = \'string\'): void',
+				'description' => 'Register a custom field type. Class must extend FormField. The optional $defaultType declares the default schema property type used when an author leaves the property\'s `type` blank (one of SchemaData::PROPERTY_TYPES, e.g. string, color, array).',
 				'phase'       => 'register',
-				'permission'  => 'fields:register',
+				'permission'  => 'fields',
 			],
 			[
 				'name'        => 'addEventListener',
@@ -936,7 +953,7 @@ function buildExtensionApiReference(): array
 				'signature'   => 'addContainerDefinition(string $id, callable $factory): void',
 				'description' => 'Register a service in the DI container',
 				'phase'       => 'register',
-				'permission'  => 'container:definitions',
+				'permission'  => 'container',
 			],
 		],
 		'events' => [
@@ -961,9 +978,19 @@ function buildExtensionApiReference(): array
 				'payload'     => ['collection' => 'string'],
 			],
 			[
+				'name'        => 'collection.updated',
+				'description' => 'Fired after a collection is updated',
+				'payload'     => ['collection' => 'string'],
+			],
+			[
 				'name'        => 'collection.deleted',
 				'description' => 'Fired after a collection is deleted',
 				'payload'     => ['collection' => 'string'],
+			],
+			[
+				'name'        => 'import.completed',
+				'description' => 'Fired after a batch import (CSV, JSON, or URL) completes',
+				'payload'     => ['collection' => 'string', 'count' => 'int'],
 			],
 			[
 				'name'        => 'schema.saved',
@@ -995,22 +1022,37 @@ function buildExtensionApiReference(): array
 				'description' => 'Fired after an extension is disabled',
 				'payload'     => ['id' => 'string'],
 			],
+			[
+				'name'        => 'cache.cleared',
+				'description' => 'Fired after the cache is cleared. Payload is the per-backend results map (SystemEventPayload).',
+				'payload'     => ['data' => 'array'],
+			],
+			[
+				'name'        => 'devmode.enabled',
+				'description' => 'Fired when developer mode is enabled (cache disabled, debug output on). Payload includes the enabling user.',
+				'payload'     => ['data' => 'array'],
+			],
+			[
+				'name'        => 'devmode.disabled',
+				'description' => 'Fired when developer mode is disabled. Empty SystemEventPayload.',
+				'payload'     => ['data' => 'array'],
+			],
 		],
 		'permissions' => [
-			['id' => 'twig:functions',        'description' => 'Register custom Twig functions'],
-			['id' => 'twig:filters',          'description' => 'Register custom Twig filters'],
-			['id' => 'twig:globals',          'description' => 'Register Twig global variables'],
-			['id' => 'cli:commands',          'description' => 'Register CLI commands'],
-			['id' => 'routes:api',            'description' => 'Register authenticated API endpoints'],
-			['id' => 'routes:admin',          'description' => 'Register admin pages'],
-			['id' => 'routes:public',         'description' => 'Register unauthenticated public endpoints'],
-			['id' => 'admin:nav',             'description' => 'Add items to admin navigation'],
-			['id' => 'admin:widgets',         'description' => 'Add dashboard widgets'],
-			['id' => 'admin:assets',          'description' => 'Load CSS/JS in the admin interface'],
-			['id' => 'events:listen',         'description' => 'Subscribe to content events'],
-			['id' => 'fields:register',       'description' => 'Register custom field types'],
-			['id' => 'settings:read',         'description' => 'Read extension settings'],
-			['id' => 'container:definitions', 'description' => 'Register DI container services'],
+			['id' => 'twig:functions', 'description' => 'Register custom Twig functions'],
+			['id' => 'twig:filters',   'description' => 'Register custom Twig filters'],
+			['id' => 'twig:globals',   'description' => 'Register Twig global variables'],
+			['id' => 'cli:commands',   'description' => 'Register CLI commands'],
+			['id' => 'routes:api',     'description' => 'Register authenticated API endpoints'],
+			['id' => 'routes:admin',   'description' => 'Register admin pages'],
+			['id' => 'routes:public',  'description' => 'Register unauthenticated public endpoints'],
+			['id' => 'admin:nav',      'description' => 'Add items to admin navigation'],
+			['id' => 'admin:widgets',  'description' => 'Add dashboard widgets'],
+			['id' => 'admin:assets',   'description' => 'Load CSS/JS in the admin interface'],
+			['id' => 'events:listen',  'description' => 'Subscribe to content events'],
+			['id' => 'fields',         'description' => 'Register custom field types'],
+			['id' => 'schemas',        'description' => 'Install user-editable schemas (Pro+ only)'],
+			['id' => 'container',      'description' => 'Register DI container services'],
 		],
 		'manifest_fields' => [
 			['field' => 'id',              'required' => true,  'description' => 'Unique ID in vendor/name format'],
@@ -1018,12 +1060,13 @@ function buildExtensionApiReference(): array
 			['field' => 'version',         'required' => true,  'description' => 'Semver version (e.g. 1.0.0)'],
 			['field' => 'description',     'required' => false, 'description' => 'Short description'],
 			['field' => 'requires',        'required' => false, 'description' => 'Version constraints (totalcms, php, extensions)'],
-			['field' => 'permissions',     'required' => false, 'description' => 'Array of permission identifiers'],
 			['field' => 'min_edition',     'required' => false, 'description' => 'Minimum edition: lite, standard, or pro'],
 			['field' => 'entrypoint',      'required' => false, 'description' => 'Path to ExtensionInterface class (default: Extension.php)'],
 			['field' => 'settings_schema', 'required' => false, 'description' => 'Path to settings JSON Schema file'],
 			['field' => 'author',          'required' => false, 'description' => 'Author object with name and url'],
 			['field' => 'license',         'required' => false, 'description' => 'License identifier (default: proprietary)'],
+			['field' => 'links',           'required' => false, 'description' => 'List of {label, url} card links shown in the admin extensions page'],
+			['field' => 'icon',            'required' => false, 'description' => 'Path to icon image displayed in the admin extensions page'],
 		],
 		'editions' => [
 			['edition' => 'lite',     'level' => 1, 'description' => 'Basic edition, available to all'],
@@ -1032,5 +1075,95 @@ function buildExtensionApiReference(): array
 		],
 		'starter_repo' => 'https://github.com/totalcms/extension-starter',
 		'url' => 'https://docs.totalcms.co/extensions/overview/',
+	];
+}
+
+/**
+ * Build a structured reference of the Site Builder.
+ * Hand-maintained — represents the user-facing contract for building sites.
+ *
+ * @return array<string, mixed>
+ */
+function buildBuilderApiReference(): array
+{
+	return [
+		'min_version' => '3.3.0',
+		'note' => 'The Site Builder requires Total CMS 3.3.0 or later. Pages are routed dynamically from the builder-pages collection — there is no generation or deployment step.',
+		'overview' => 'The Site Builder lets you build a complete frontend website inside Total CMS. Pages are collection objects with URL routes and templates. A middleware-based router (PageRouterMiddleware) matches incoming URLs against page routes and renders templates dynamically. API routes (/api/*) and admin routes (/admin/*) take priority.',
+		'pages_collection' => 'builder-pages',
+		'page_schema' => [
+			'id'          => 'builder-page',
+			'description' => 'Schema used by every object in the builder-pages collection.',
+			'fields' => [
+				['name' => 'id',          'type' => 'slug',     'description' => 'Page identifier (auto-generated from title)'],
+				['name' => 'title',       'type' => 'text',     'description' => 'Page title'],
+				['name' => 'route',       'type' => 'text',     'description' => 'URL pattern. Static (e.g. "/about") or dynamic with {param} placeholders (e.g. "/products/{id}")'],
+				['name' => 'template',    'type' => 'text',     'description' => 'Page template name from tcms-data/builder/pages/'],
+				['name' => 'layout',      'type' => 'select',   'description' => 'Layout template from tcms-data/builder/layouts/ (extended via {% extends %})'],
+				['name' => 'description', 'type' => 'textarea', 'description' => 'Meta description'],
+				['name' => 'draft',       'type' => 'toggle',   'description' => 'When true, the page is excluded from routing entirely (cannot be visited)'],
+				['name' => 'nav',         'type' => 'toggle',   'description' => 'Include in nav menus. Defaults to true. Distinct from draft — a published page can be hidden from menus.'],
+				['name' => 'sort',        'type' => 'number',   'description' => 'Navigation sort order (lower = first)'],
+				['name' => 'parent',      'type' => 'select',   'description' => 'Parent page ID for hierarchical menus and subnav()'],
+			],
+		],
+		'directory_structure' => [
+			['path' => 'tcms-data/builder/layouts/',  'description' => 'Base HTML layouts. Page templates extend these via {% extends "layouts/<name>.twig" %}.'],
+			['path' => 'tcms-data/builder/pages/',    'description' => 'Page content templates. Multiple page objects can share the same template.'],
+			['path' => 'tcms-data/builder/partials/', 'description' => 'Reusable fragments (nav, footer, cards). Included via {% include %}.'],
+			['path' => 'tcms-data/builder/macros/',   'description' => 'Reusable Twig macros for repeated rendering patterns.'],
+		],
+		'template_data' => [
+			['name' => 'page',   'type' => 'object', 'description' => 'The full page object (id, title, route, template, layout, description, sort, parent, etc.)'],
+			['name' => 'params', 'type' => 'object', 'description' => 'URL parameters extracted from dynamic routes. For route /products/{id}, params.id holds the captured segment.'],
+		],
+		'twig_functions' => [
+			['name' => 'cms.builder.nav',     'signature' => 'nav(string $collection = "builder-pages"): array',                  'description' => 'Top-level navigation pages (no parent). Auto-filters drafts and nav:false pages, sorted by sort field.'],
+			['name' => 'cms.builder.subnav',  'signature' => 'subnav(string $parentId, string $collection = "builder-pages"): array', 'description' => 'Child pages of a specific parent.'],
+			['name' => 'cms.builder.navTree', 'signature' => 'navTree(string $collection = "builder-pages"): array',              'description' => 'Full hierarchy as a nested tree. Each item gets a children array, recursively.'],
+			['name' => 'cms.builder.asset',   'signature' => 'asset(string $path): string',                                       'description' => 'Resolve an asset path to a URL with cache busting (manifest hash if present, else ?v=mtime).'],
+			['name' => 'cms.builder.css',     'signature' => 'css(string $path): string',                                         'description' => 'Output a <link rel="stylesheet"> tag for a CSS file.'],
+			['name' => 'cms.builder.js',      'signature' => 'js(string $path, array $options = []): string',                     'description' => 'Output a <script> tag. Pass {module: true} to add type="module".'],
+			['name' => 'cms.builder.preload', 'signature' => 'preload(string $path, string $as): string',                         'description' => 'Output a <link rel="preload"> tag. Auto-adds crossorigin for fonts. $as is one of: font, image, script, style, fetch.'],
+		],
+		'cli_commands' => [
+			['name' => 'builder:init', 'signature' => 'tcms builder:init [starter] [--list] [--force] [--json]', 'description' => 'Scaffold a new site from a bundled starter template. Copies templates into tcms-data/builder/, creates the builder-pages collection, and seeds page objects from the starter manifest.'],
+		],
+		'starters' => [
+			['id' => 'minimal',   'pages' => ['Home'],                                            'description' => 'Single page with clean layout'],
+			['id' => 'business',  'pages' => ['Home', 'About', 'Services', 'Contact'],            'description' => 'Professional business site'],
+			['id' => 'blog',      'pages' => ['Home', 'Blog', 'Blog Post', 'About'],              'description' => 'Blog-focused site with dynamic post routing'],
+			['id' => 'portfolio', 'pages' => ['Home', 'Work', 'About', 'Contact'],                'description' => 'Portfolio site with project cards'],
+		],
+		'asset_config' => [
+			'assets_path' => [
+				'description' => 'Public assets directory relative to docroot. Configured in Admin > Settings > Builder.',
+				'default'     => 'assets',
+			],
+			'manifest' => [
+				'description' => 'For production builds with content-hashed filenames, output a manifest.json into the assets directory. Asset functions automatically resolve hashed filenames from the manifest. Without a manifest, asset URLs use ?v={mtime} for cache busting.',
+				'file'        => 'manifest.json',
+				'tools'       => ['vite', 'esbuild'],
+			],
+		],
+		'route_patterns' => [
+			['pattern' => '/about',                'type' => 'static',  'description' => 'Exact match. Visiting /about renders this page.'],
+			['pattern' => '/products/{id}',        'type' => 'dynamic', 'description' => 'Single segment captured into params.id.'],
+			['pattern' => '/blog/{category}/{slug}', 'type' => 'dynamic', 'description' => 'Multiple segments captured into params.category and params.slug.'],
+			['pattern' => '/robots.txt',           'type' => 'file',    'description' => 'File-extension routes auto-pick the right Content-Type. Supports .txt, .xml, .rss, .json, .md, .css, .js, .csv, .svg.'],
+		],
+		'collection_url_routing' => [
+			'description' => 'When a collection has a url field set (e.g., /blog with pretty URLs enabled), the middleware also matches collection object URLs. /blog/my-post → fetches the my-post object from blog and renders templates/blog.twig with the object as page.',
+			'pairing'     => 'A common pattern is a builder list page (/blog → blog-index template) plus a builder detail page (/blog/{id} → blog-post template) with the collection URL set to /blog so objectUrl() generates matching URLs.',
+		],
+		'docs' => [
+			['label' => 'Site Builder Overview',     'url' => 'https://docs.totalcms.co/builder/overview/'],
+			['label' => 'Builder Admin UI',          'url' => 'https://docs.totalcms.co/builder/admin/'],
+			['label' => 'Frontend Assets (Vite)',    'url' => 'https://docs.totalcms.co/builder/frontend/'],
+			['label' => 'Builder CLI Commands',      'url' => 'https://docs.totalcms.co/builder/cli/'],
+			['label' => 'Starter Templates',         'url' => 'https://docs.totalcms.co/builder/starters/'],
+			['label' => 'Builder Twig Reference',    'url' => 'https://docs.totalcms.co/twig/builder/'],
+		],
+		'url' => 'https://docs.totalcms.co/builder/overview/',
 	];
 }

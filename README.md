@@ -31,6 +31,8 @@ No authentication required.
 | `docs_api_endpoint` | REST API endpoint details |
 | `docs_schema_config` | Schema/collection config options |
 | `docs_cli_command` | CLI command reference |
+| `docs_extension` | Extension API: context methods, events, permissions, manifest fields |
+| `docs_builder` | Site Builder reference: page schema, twig functions, asset pipeline, starters |
 
 ## Self-Hosting
 
