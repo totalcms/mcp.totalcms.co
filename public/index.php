@@ -2,7 +2,28 @@
 
 declare(strict_types=1);
 
+use GuzzleHttp\Psr7\ServerRequest;
+use Laminas\HttpHandlerRunner\Emitter\SapiEmitter;
+use Mcp\Server;
+use Mcp\Server\Transport\StreamableHttpTransport;
+use Mcp\Schema\ToolAnnotations;
+use Monolog\Formatter\LineFormatter;
+use Monolog\Handler\RotatingFileHandler;
+use Monolog\Logger;
+use TotalCMS\Mcp\DocsTools;
+use TotalCMS\Mcp\Health;
+use TotalCMS\Mcp\SafeFileSessionStore;
+
 require_once __DIR__ . '/../vendor/autoload.php';
+
+// Health check — returns server status for uptime monitoring
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && str_starts_with($_SERVER['REQUEST_URI'] ?? '/', '/health')) {
+	$status = Health::status(__DIR__ . '/../data/index.json');
+	http_response_code($status['ok'] ? 200 : 503);
+	header('Content-Type: application/json');
+	echo json_encode($status, JSON_PRETTY_PRINT);
+	exit;
+}
 
 // Redirect browsers to the docs
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && !str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
@@ -10,15 +31,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !str_contains($_SERVER['HTTP_ACCEPT'
 	exit;
 }
 
-use GuzzleHttp\Psr7\ServerRequest;
-use Laminas\HttpHandlerRunner\Emitter\SapiEmitter;
-use Mcp\Server;
-use Mcp\Server\Session\FileSessionStore;
-use Mcp\Server\Transport\StreamableHttpTransport;
-use Mcp\Schema\ToolAnnotations;
-use TotalCMS\Mcp\DocsTools;
+// Set up rotating logger (one file per day, keep 14 days)
+$logDir = __DIR__ . '/../logs';
+if (!is_dir($logDir)) {
+	@mkdir($logDir, 0o755, true);
+}
+$logHandler = new RotatingFileHandler($logDir . '/mcp.log', 14, Logger::INFO);
+$logHandler->setFormatter(new LineFormatter(null, null, true, true));
+$logger = new Logger('mcp');
+$logger->pushHandler($logHandler);
 
-// Load the documentation index
+// Load the documentation index (APCu-cached, invalidated by file mtime)
 $indexPath = __DIR__ . '/../data/index.json';
 if (!file_exists($indexPath)) {
 	http_response_code(500);
@@ -26,7 +49,20 @@ if (!file_exists($indexPath)) {
 	exit(1);
 }
 
-$index = json_decode(file_get_contents($indexPath), true);
+$index = null;
+if (function_exists('apcu_fetch') && apcu_enabled()) {
+	$cacheKey = 'tcms_mcp_index:' . filemtime($indexPath);
+	$cached = apcu_fetch($cacheKey, $hit);
+	if ($hit) {
+		$index = $cached;
+	} else {
+		$index = json_decode(file_get_contents($indexPath), true);
+		apcu_store($cacheKey, $index, 3600);
+	}
+} else {
+	$index = json_decode(file_get_contents($indexPath), true);
+}
+
 $tools = new DocsTools($index);
 $readOnly = new ToolAnnotations(readOnlyHint: true);
 
@@ -42,7 +78,8 @@ $builder = Server::builder()
 		. 'Use docs_search for general queries. Use the specific lookup tools (docs_twig_function, docs_twig_filter, etc.) '
 		. 'when you know exactly what you are looking for.'
 	)
-	->setSession(new FileSessionStore(__DIR__ . '/../data/sessions'));
+	->setSession(new SafeFileSessionStore(__DIR__ . '/../data/sessions', logger: $logger))
+	->setLogger($logger);
 
 // Register tools as closures bound to the DocsTools instance
 $builder->addTool(
@@ -110,21 +147,23 @@ $builder->addTool(
 
 $server = $builder->build();
 
-// Log MCP connections (initialize requests only)
+// Log MCP initialize requests so we can see which clients are connecting
 $rawBody = file_get_contents('php://input');
 if ($rawBody !== false && str_contains($rawBody, '"initialize"')) {
 	$payload = json_decode($rawBody, true);
 	$clientInfo = $payload['params']['clientInfo'] ?? [];
-	$logEntry = date('c')
-		. "\t" . ($clientInfo['name'] ?? 'unknown')
-		. "\t" . ($clientInfo['version'] ?? '')
-		. "\t" . ($_SERVER['REMOTE_ADDR'] ?? '')
-		. "\n";
-	file_put_contents(__DIR__ . '/../logs/connections.log', $logEntry, FILE_APPEND | LOCK_EX);
+	$logger->info('MCP initialize', [
+		'client'  => $clientInfo['name'] ?? 'unknown',
+		'version' => $clientInfo['version'] ?? '',
+		'ip'      => $_SERVER['REMOTE_ADDR'] ?? '',
+	]);
 }
 
-// Create PSR-7 request from PHP globals
+// Create PSR-7 request from PHP globals (reusing the raw body we already read)
 $request = ServerRequest::fromGlobals();
+if ($rawBody !== false && $rawBody !== '') {
+	$request = $request->withBody(\GuzzleHttp\Psr7\Utils::streamFor($rawBody));
+}
 
 // Run transport
 $transport = new StreamableHttpTransport($request);
