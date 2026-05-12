@@ -1,5 +1,7 @@
 /vendor/
 /data/sessions/
+/data/index.json
 /logs/
+/.phpunit.cache/
 .DS_Store
 .claude

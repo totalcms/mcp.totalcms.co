@@ -46,17 +46,60 @@ No authentication required.
 
 ```bash
 composer install
-php bin/build-index.php /path/to/totalcms
+bin/build.sh /path/to/totalcms     # or just `bin/build.sh` to pull from Packagist
 php -S localhost:8765 -t public/
 ```
 
 ### Building the Index
 
-The documentation index is built from markdown files in the [totalcms/cms](https://github.com/totalcms/cms) repo:
+`bin/build.sh` reads markdown from a Total CMS source tree and writes `data/index.json`:
 
 ```bash
-bin/build.sh /path/to/totalcms
+bin/build.sh /path/to/totalcms     # build from a local T3 checkout
+bin/build.sh                       # composer-install totalcms/cms into a temp dir and build from there
 ```
+
+`data/index.json` is a build artifact and is not committed to the repo.
+
+### Deploying
+
+On the server:
+
+```bash
+bin/deploy.sh
+```
+
+This runs `composer install --no-dev`, rebuilds the index from the latest `totalcms/cms` on Packagist, and ensures `data/sessions` exists.
+
+### Tests
+
+```bash
+composer test
+```
+
+### Cron
+
+To keep stale session files under control on production, add this crontab entry:
+
+```cron
+*/15 * * * * /path/to/mcp.totalcms.co/bin/cleanup-sessions.sh >/dev/null
+```
+
+### Health Check
+
+`GET /health` returns JSON:
+
+```json
+{
+  "ok": true,
+  "index_built_at": "2026-05-12T15:00:00+00:00",
+  "index_pages_count": 114,
+  "sdk_version": "v0.5.0",
+  "php_version": "8.4.x"
+}
+```
+
+Returns `503` if `data/index.json` is missing.
 
 ## Links
 

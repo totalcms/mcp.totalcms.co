@@ -1,13 +1,16 @@
 #!/bin/bash
 #
-# Deploy script for mcp.totalcms.co
+# Deploy mcp.totalcms.co. Run on the server (via webhook or manually).
 #
-# Usage: bin/deploy.sh [/path/to/totalcms]
+# Usage: bin/deploy.sh
 #
 # Steps:
-# 1. Install dependencies
-# 2. Ensure sessions directory exists
-# TODO: install T3 with composer when that is ready and remove index.json from the repo
+#   1. composer install --no-dev
+#   2. Rebuild the documentation index from the latest totalcms/cms on Packagist
+#   3. Ensure data/sessions exists
+#
+# For local development, run bin/build.sh /path/to/local/totalcms directly to
+# rebuild the index against a checkout in progress.
 #
 
 set -e
@@ -19,15 +22,12 @@ cd "$PROJECT_DIR"
 
 echo "=== Deploying mcp.totalcms.co ==="
 
-# Install dependencies
 echo "Installing dependencies..."
 composer install --no-dev --optimize-autoloader --no-interaction
 
-# Rebuild index
-# echo "Building documentation index..."
-# php bin/build-index.php "$TOTALCMS_PATH"
+echo "Rebuilding documentation index from Packagist..."
+bin/build.sh
 
-# Ensure sessions directory
 mkdir -p data/sessions
 
 echo ""
