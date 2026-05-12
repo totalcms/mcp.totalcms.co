@@ -94,6 +94,20 @@ $builder->addTool(
 	annotations: $readOnly,
 );
 
+$builder->addTool(
+	handler: fn (string $query) => $tools->extension($query),
+	name: 'docs_extension',
+	description: 'Look up Total CMS extension API details: context methods, events, permissions, manifest fields, or bundled extensions. Example: docs_extension("addTwigFunction"), docs_extension("object.created"), docs_extension("permissions"), docs_extension("bundled"), docs_extension("totalcms/ab-split"), or docs_extension("geo-redirect")',
+	annotations: $readOnly,
+);
+
+$builder->addTool(
+	handler: fn (string $query) => $tools->builder($query),
+	name: 'docs_builder',
+	description: 'Look up Total CMS Site Builder details: page schema, directory structure, twig functions, asset pipeline, starter templates, CLI commands, route patterns, and page features (middleware). Examples: docs_builder("overview"), docs_builder("schema"), docs_builder("twig"), docs_builder("features"), docs_builder("starters"), docs_builder("cms.builder.nav"), docs_builder("ab-split")',
+	annotations: $readOnly,
+);
+
 $server = $builder->build();
 
 // Log MCP connections (initialize requests only)
