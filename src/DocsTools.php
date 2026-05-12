@@ -372,24 +372,24 @@ class DocsTools
 	 */
 	private function extractContext(string $content, array $terms): string
 	{
-		$lowerContent = strtolower($content);
+		$lowerContent = mb_strtolower($content);
 		$bestPos = null;
 
 		foreach ($terms as $term) {
-			$pos = strpos($lowerContent, $term);
+			$pos = mb_strpos($lowerContent, $term);
 			if ($pos !== false && ($bestPos === null || $pos < $bestPos)) {
 				$bestPos = $pos;
 			}
 		}
 
 		if ($bestPos === null) {
-			return substr($content, 0, 200) . '...';
+			return mb_substr($content, 0, 200) . '...';
 		}
 
 		$start = max(0, $bestPos - 80);
-		$excerpt = substr($content, $start, 300);
+		$excerpt = mb_substr($content, $start, 300);
 		$prefix = $start > 0 ? '...' : '';
-		$suffix = ($start + 300) < strlen($content) ? '...' : '';
+		$suffix = ($start + 300) < mb_strlen($content) ? '...' : '';
 
 		return $prefix . trim($excerpt) . $suffix;
 	}
@@ -401,7 +401,7 @@ class DocsTools
 	 */
 	#[McpTool(
 		name: 'docs_extension',
-		description: 'Look up Total CMS extension API details: context methods, events, permissions, or manifest fields. Example: docs_extension("addTwigFunction") or docs_extension("object.created") or docs_extension("permissions")',
+		description: 'Look up Total CMS extension API details: context methods, events, permissions, manifest fields, or bundled extensions. Example: docs_extension("addTwigFunction"), docs_extension("object.created"), docs_extension("permissions"), docs_extension("bundled"), docs_extension("totalcms/ab-split"), or docs_extension("geo-redirect")',
 		annotations: new ToolAnnotations(readOnlyHint: true),
 	)]
 	public function extension(string $query): string
@@ -430,6 +430,24 @@ class DocsTools
 		}
 		if ($query === 'editions') {
 			return json_encode($api['editions'] ?? [], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+		if ($query === 'bundled' || $query === 'bundled_extensions') {
+			return json_encode($api['bundled_extensions'] ?? [], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+		}
+
+		// Specific bundled extension lookup — by full id (totalcms/ab-split),
+		// short id (ab-split), or page-feature name (also ab-split / geo-redirect).
+		foreach ($api['bundled_extensions']['items'] ?? [] as $item) {
+			$id = strtolower($item['id'] ?? '');
+			$shortId = strtolower(basename($item['id'] ?? ''));
+			$feature = strtolower($item['page_feature'] ?? '');
+			if ($id === $query || $shortId === $query || $feature === $query) {
+				return json_encode([
+					'type'        => 'bundled_extension',
+					...$item,
+					'min_version' => $api['bundled_extensions']['since'] ?? $versionNote,
+				], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
 		}
 
 		// Search context methods by name
@@ -477,6 +495,12 @@ class DocsTools
 				$matches[] = ['type' => 'permission', ...$perm];
 			}
 		}
+		foreach ($api['bundled_extensions']['items'] ?? [] as $item) {
+			$haystack = strtolower(($item['id'] ?? '') . ' ' . ($item['name'] ?? '') . ' ' . ($item['description'] ?? '') . ' ' . ($item['page_feature'] ?? ''));
+			if (str_contains($haystack, $query)) {
+				$matches[] = ['type' => 'bundled_extension', ...$item];
+			}
+		}
 
 		if (!empty($matches)) {
 			return json_encode([
@@ -487,7 +511,7 @@ class DocsTools
 
 		return json_encode([
 			'error' => "No extension API match for '{$query}'.",
-			'hint'  => 'Try: "methods", "events", "permissions", "manifest", "editions", or a specific name like "addTwigFunction" or "object.created"',
+			'hint'  => 'Try: "methods", "events", "permissions", "manifest", "editions", "bundled", or a specific name like "addTwigFunction", "object.created", or "totalcms/ab-split"',
 			'url'   => $api['url'] ?? 'https://docs.totalcms.co/extensions/overview/',
 		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
 	}
@@ -505,13 +529,15 @@ class DocsTools
 	 * - "starters"  — bundled starter templates (minimal, business, blog, portfolio)
 	 * - "cli"       — builder:init scaffolding command
 	 * - "routes"    — static and dynamic route patterns, and collection URL routing
+	 * - "features"  — page features / middleware system (built-in auth + bundled features like ab-split, geo-redirect)
 	 *
 	 * Or query by a specific identifier — a twig function name (e.g. "cms.builder.nav"),
-	 * a starter id (e.g. "blog"), a page schema field (e.g. "route"), or a CLI command.
+	 * a starter id (e.g. "blog"), a page schema field (e.g. "route", "middleware"),
+	 * a CLI command, or a page-feature name (e.g. "auth", "ab-split", "geo-redirect").
 	 */
 	#[McpTool(
 		name: 'docs_builder',
-		description: 'Look up Total CMS Site Builder details: page schema, directory structure, twig functions, asset pipeline, starter templates, CLI commands, and route patterns. Use this when helping users build site templates and frontends. Examples: docs_builder("overview"), docs_builder("schema"), docs_builder("twig"), docs_builder("starters"), docs_builder("cms.builder.nav"), docs_builder("blog")',
+		description: 'Look up Total CMS Site Builder details: page schema, directory structure, twig functions, asset pipeline, starter templates, CLI commands, route patterns, and page features (middleware). Use this when helping users build site templates and frontends. Examples: docs_builder("overview"), docs_builder("schema"), docs_builder("twig"), docs_builder("starters"), docs_builder("features"), docs_builder("cms.builder.nav"), docs_builder("blog"), docs_builder("ab-split")',
 		annotations: new ToolAnnotations(readOnlyHint: true),
 	)]
 	public function builder(string $query): string
@@ -539,22 +565,25 @@ class DocsTools
 
 		// Category queries
 		$categories = [
-			'schema'      => ['page_schema'],
-			'page'        => ['page_schema'],
-			'pages'       => ['page_schema', 'pages_collection'],
-			'templates'   => ['directory_structure', 'template_data'],
-			'directory'   => ['directory_structure'],
-			'data'        => ['template_data'],
-			'twig'        => ['twig_functions'],
-			'functions'   => ['twig_functions'],
-			'assets'      => ['asset_config'],
-			'asset'       => ['asset_config'],
-			'starters'    => ['starters'],
-			'starter'     => ['starters'],
-			'cli'         => ['cli_commands'],
-			'commands'    => ['cli_commands'],
-			'routes'      => ['route_patterns', 'collection_url_routing'],
-			'routing'     => ['route_patterns', 'collection_url_routing'],
+			'schema'         => ['page_schema'],
+			'page'           => ['page_schema'],
+			'pages'          => ['page_schema', 'pages_collection'],
+			'templates'      => ['directory_structure', 'template_data'],
+			'directory'      => ['directory_structure'],
+			'data'           => ['template_data'],
+			'twig'           => ['twig_functions'],
+			'functions'      => ['twig_functions'],
+			'assets'         => ['asset_config'],
+			'asset'          => ['asset_config'],
+			'starters'       => ['starters'],
+			'starter'        => ['starters'],
+			'cli'            => ['cli_commands'],
+			'commands'       => ['cli_commands'],
+			'routes'         => ['route_patterns', 'collection_url_routing'],
+			'routing'        => ['route_patterns', 'collection_url_routing'],
+			'features'       => ['page_features'],
+			'page_features'  => ['page_features'],
+			'middleware'     => ['page_features'],
 		];
 
 		if (isset($categories[$query])) {
@@ -600,7 +629,28 @@ class DocsTools
 			}
 		}
 
-		// Partial matches across functions, fields, starters
+		// Page feature by name (built-in or bundled)
+		foreach ($api['page_features']['built_in'] ?? [] as $feature) {
+			if (strtolower($feature['name']) === $query) {
+				return json_encode([
+					'type'        => 'page_feature',
+					'source'      => 'built-in',
+					...$feature,
+					'min_version' => $versionNote,
+				], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+		foreach ($api['page_features']['bundled_features'] ?? [] as $feature) {
+			if (strtolower($feature['name']) === $query) {
+				return json_encode([
+					'type'   => 'page_feature',
+					'source' => 'bundled-extension',
+					...$feature,
+				], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
+			}
+		}
+
+		// Partial matches across functions, fields, starters, page features
 		$matches = [];
 		foreach ($api['twig_functions'] ?? [] as $fn) {
 			if (str_contains(strtolower($fn['name']), $query) || str_contains(strtolower($fn['description']), $query)) {
@@ -617,6 +667,16 @@ class DocsTools
 				$matches[] = ['type' => 'starter', ...$starter];
 			}
 		}
+		foreach ($api['page_features']['built_in'] ?? [] as $feature) {
+			if (str_contains(strtolower($feature['name']), $query) || str_contains(strtolower($feature['description']), $query)) {
+				$matches[] = ['type' => 'page_feature', 'source' => 'built-in', ...$feature];
+			}
+		}
+		foreach ($api['page_features']['bundled_features'] ?? [] as $feature) {
+			if (str_contains(strtolower($feature['name']), $query) || str_contains(strtolower($feature['description']), $query)) {
+				$matches[] = ['type' => 'page_feature', 'source' => 'bundled-extension', ...$feature];
+			}
+		}
 
 		if (!empty($matches)) {
 			return json_encode([
@@ -627,7 +687,7 @@ class DocsTools
 
 		return json_encode([
 			'error' => "No Site Builder match for '{$query}'.",
-			'hint'  => 'Try a category — "overview", "schema", "templates", "twig", "assets", "starters", "cli", or "routes" — or a specific name like "cms.builder.nav", "route", or "blog".',
+			'hint'  => 'Try a category — "overview", "schema", "templates", "twig", "assets", "starters", "cli", "routes", or "features" — or a specific name like "cms.builder.nav", "route", "blog", "auth", "ab-split", or "geo-redirect".',
 			'url'   => $api['url'] ?? 'https://docs.totalcms.co/builder/overview/',
 		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
 	}

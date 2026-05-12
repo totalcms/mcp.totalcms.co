@@ -955,6 +955,14 @@ function buildExtensionApiReference(): array
 				'phase'       => 'register',
 				'permission'  => 'container',
 			],
+			[
+				'name'        => 'addPageMiddleware',
+				'signature'   => 'addPageMiddleware(string $name, string $middlewareClass): void',
+				'description' => 'Register a page-features middleware. Class must implement TotalCMS\\Domain\\Builder\\PageMiddleware\\PageMiddlewareInterface. Name must be lowercase letters, digits, and hyphens (e.g. "geo-redirect", "rate-limit"). Once registered, the name appears in the page form\'s Features multiselect; admins opt-in per page.',
+				'phase'       => 'register',
+				'permission'  => 'page-middleware',
+				'since'       => '3.5.0',
+			],
 		],
 		'events' => [
 			[
@@ -1053,6 +1061,7 @@ function buildExtensionApiReference(): array
 			['id' => 'fields',         'description' => 'Register custom field types'],
 			['id' => 'schemas',        'description' => 'Install user-editable schemas (Pro+ only)'],
 			['id' => 'container',      'description' => 'Register DI container services'],
+			['id' => 'page-middleware','description' => 'Register page-features middleware (since 3.5.0)'],
 		],
 		'manifest_fields' => [
 			['field' => 'id',              'required' => true,  'description' => 'Unique ID in vendor/name format'],
@@ -1074,6 +1083,51 @@ function buildExtensionApiReference(): array
 			['edition' => 'pro',      'level' => 3, 'description' => 'Full features including custom schemas and extensions schemas'],
 		],
 		'starter_repo' => 'https://github.com/totalcms/extension-starter',
+		'bundled_extensions' => [
+			'since' => '3.5.0',
+			'note' => 'Bundled extensions ship in the T3 package itself under resources/extensions/. They install automatically (no composer require, no upload), are disabled by default, and cannot be removed — only enabled/disabled. The manifest version field is ignored; they always report the running T3 version. A user-installed extension with the same ID under tcms-data/extensions/ shadows the bundled copy.',
+			'install_path' => 'resources/extensions/{vendor}/{name}/',
+			'override_path' => 'tcms-data/extensions/{vendor}/{name}/ (user-installed copy wins on ID collision)',
+			'items' => [
+				[
+					'id'          => 'totalcms/ab-split',
+					'name'        => 'A/B Split',
+					'description' => 'Render an alternate page template at the same URL for a percentage of visitors. Sticky-bucketing via a 30-day cookie. Use for layout, copy, or CTA variations without changing the URL.',
+					'page_feature' => 'ab-split',
+					'page_data_keys' => [
+						['key' => 'abTemplate', 'type' => 'string', 'description' => 'Path to variant-B template (e.g. pages/contact-b.twig). Required — empty or missing means the middleware no-ops and the page renders normally.'],
+						['key' => 'abPercent',  'type' => 'int',    'default' => 50, 'description' => 'Percentage of visitors sent to variant B. Clamped to 0-100. Use 100 to force every visitor onto B for validation; 0 effectively disables the split.'],
+					],
+					'cookie' => ['name' => 'tcms_ab_<page-id>', 'value' => 'a or b', 'ttl' => '30 days', 'path' => '/', 'samesite' => 'Lax'],
+					'limitations' => ['Two variants only (A/B, no multivariate)', 'Builder pages only — collection-URL matches not supported', 'No built-in analytics — read the cookie client-side and tag your analytics events'],
+					'url' => 'https://docs.totalcms.co/extensions/bundled/ab-split/',
+				],
+				[
+					'id'          => 'totalcms/geo-redirect',
+					'name'        => 'Geo Redirect',
+					'description' => 'Redirect visitors based on their country via 302. Reads country from CDN-injected request headers (no IP database). Includes loop prevention and a Vary header so CDN caches separate per-country variants.',
+					'page_feature' => 'geo-redirect',
+					'page_data_keys' => [
+						['key' => 'geoRedirects', 'type' => 'object', 'description' => 'Map of ISO 3166-1 alpha-2 country code (e.g. "DE", "FR") to target URL. Use "*" as wildcard fallback for unlisted countries. Targets can be paths, absolute URLs, or include query strings.'],
+					],
+					'country_headers' => ['CF-IPCountry (Cloudflare)', 'X-Country-Code (generic / DIY proxies)', 'X-Vercel-IP-Country (Vercel)'],
+					'response_headers' => ['Vary: CF-IPCountry, X-Country-Code, X-Vercel-IP-Country'],
+					'limitations' => ['Country-level only, no city/region precision', 'Not a strong access-control mechanism — bypassable with VPN or header manipulation', 'Builder pages only — collection-URL matches not supported'],
+					'url' => 'https://docs.totalcms.co/extensions/bundled/geo-redirect/',
+				],
+			],
+			'cli' => [
+				'tcms extension:list',
+				'tcms extension:enable totalcms/<name>',
+				'tcms extension:disable totalcms/<name>',
+				'tcms extension:remove totalcms/<name>  # refuses with a friendly error pointing at disable',
+			],
+			'docs' => [
+				['label' => 'Bundled Extensions Overview', 'url' => 'https://docs.totalcms.co/extensions/bundled/'],
+				['label' => 'A/B Split',                   'url' => 'https://docs.totalcms.co/extensions/bundled/ab-split/'],
+				['label' => 'Geo Redirect',                'url' => 'https://docs.totalcms.co/extensions/bundled/geo-redirect/'],
+			],
+		],
 		'url' => 'https://docs.totalcms.co/extensions/overview/',
 	];
 }
@@ -1105,6 +1159,9 @@ function buildBuilderApiReference(): array
 				['name' => 'nav',         'type' => 'toggle',   'description' => 'Include in nav menus. Defaults to true. Distinct from draft — a published page can be hidden from menus.'],
 				['name' => 'sort',        'type' => 'number',   'description' => 'Navigation sort order (lower = first)'],
 				['name' => 'parent',      'type' => 'select',   'description' => 'Parent page ID for hierarchical menus and subnav()'],
+				['name' => 'middleware',  'type' => 'multicheckbox', 'description' => 'Page features (middleware) to run before render. Picked from a registry of installed middleware names — admin sees this field as "Features". Built-in: auth. Extensions register more via addPageMiddleware(). Since 3.5.0.'],
+				['name' => 'accessGroups','type' => 'multiselect',   'description' => 'When auth feature is enabled, restricts access to users in any of the listed groups (SuperAdmins always pass). Empty = any logged-in user passes.'],
+				['name' => 'data',        'type' => 'json',     'description' => 'Free-form per-page configuration consumed by page features and templates (exposed as page.data.* in Twig).'],
 			],
 		],
 		'directory_structure' => [
@@ -1156,13 +1213,43 @@ function buildBuilderApiReference(): array
 			'description' => 'When a collection has a url field set (e.g., /blog with pretty URLs enabled), the middleware also matches collection object URLs. /blog/my-post → fetches the my-post object from blog and renders templates/blog.twig with the object as page.',
 			'pairing'     => 'A common pattern is a builder list page (/blog → blog-index template) plus a builder detail page (/blog/{id} → blog-post template) with the collection URL set to /blog so objectUrl() generates matching URLs.',
 		],
+		'page_features' => [
+			'since'       => '3.5.0',
+			'description' => 'Named middleware that builder pages opt into via the page form\'s Features field (stored in the page\'s middleware field). Each runs before the template renders and can short-circuit the request with a response (auth redirect, 302, 429, etc.) or pass through. Features run in the order listed on the page; the first one to return a response wins.',
+			'admin_field' => 'Features (multicheckbox, stored as the page object\'s middleware field)',
+			'config_via'  => 'Per-page configuration goes in the page\'s data (JSON) field. Each feature reads its own keys from page.data.* — see individual feature docs.',
+			'built_in' => [
+				[
+					'name'        => 'auth',
+					'description' => 'Requires a logged-in visitor. Logged-out browsers get 302 redirected to /admin/login (with ?redirect= back). JSON requests get 401 {"error": "Authentication required"}. Optionally scoped to specific access groups via the page\'s accessGroups field — non-members get 403 (no login redirect since they\'re already in). SuperAdmins always pass.',
+					'page_fields' => ['accessGroups'],
+				],
+			],
+			'bundled_features' => [
+				['name' => 'ab-split',     'extension' => 'totalcms/ab-split',     'since' => '3.5.0', 'description' => 'Render an alternate template for a percentage of visitors. Sticky via 30-day cookie. Configure via page.data.abTemplate and page.data.abPercent.', 'url' => 'https://docs.totalcms.co/extensions/bundled/ab-split/'],
+				['name' => 'geo-redirect', 'extension' => 'totalcms/geo-redirect', 'since' => '3.5.0', 'description' => '302 visitors based on country detected from CDN-injected headers (Cloudflare, Vercel, generic). Configure via page.data.geoRedirects.', 'url' => 'https://docs.totalcms.co/extensions/bundled/geo-redirect/'],
+			],
+			'registering_from_extension' => [
+				'method'          => '$context->addPageMiddleware(string $name, string $middlewareClass): void',
+				'permission'      => 'page-middleware',
+				'naming_rules'    => 'Lowercase letters, digits, and hyphens only (e.g. geo-redirect, rate-limit, staff-only). Names are a stable contract — once shipped, a rename breaks pages that reference them.',
+				'class_contract'  => 'Must implement TotalCMS\\Domain\\Builder\\PageMiddleware\\PageMiddlewareInterface — handle(ServerRequestInterface $request, PageData $page): ?ResponseInterface. Return null to proceed (let next middleware / page render); return a Response to short-circuit.',
+			],
+			'failure_modes' => [
+				'Unknown name in a page\'s middleware list (typo or uninstalled extension): runner logs a warning, silently skips that name, chain continues — page still renders.',
+				'Middleware throws an exception: runner returns a 500 response (fail-closed for security so auth/geo gates never silently let pages through).',
+			],
+			'scope' => 'Per-page middleware applies only to builder-page route matches. Collection-URL matches (e.g. /blog/my-post resolved against a collection\'s url field) do NOT currently support per-record middleware — apply your own auth/etc in the collection\'s template.',
+		],
 		'docs' => [
-			['label' => 'Site Builder Overview',     'url' => 'https://docs.totalcms.co/builder/overview/'],
-			['label' => 'Builder Admin UI',          'url' => 'https://docs.totalcms.co/builder/admin/'],
-			['label' => 'Frontend Assets (Vite)',    'url' => 'https://docs.totalcms.co/builder/frontend/'],
-			['label' => 'Builder CLI Commands',      'url' => 'https://docs.totalcms.co/builder/cli/'],
-			['label' => 'Starter Templates',         'url' => 'https://docs.totalcms.co/builder/starters/'],
-			['label' => 'Builder Twig Reference',    'url' => 'https://docs.totalcms.co/twig/builder/'],
+			['label' => 'Site Builder Overview',         'url' => 'https://docs.totalcms.co/builder/overview/'],
+			['label' => 'Page Features (Middleware)',    'url' => 'https://docs.totalcms.co/builder/overview/#page-features-middleware'],
+			['label' => 'Builder Admin UI',              'url' => 'https://docs.totalcms.co/builder/admin/'],
+			['label' => 'Frontend Assets (Vite)',        'url' => 'https://docs.totalcms.co/builder/frontend/'],
+			['label' => 'Builder CLI Commands',          'url' => 'https://docs.totalcms.co/builder/cli/'],
+			['label' => 'Starter Templates',             'url' => 'https://docs.totalcms.co/builder/starters/'],
+			['label' => 'Builder Twig Reference',        'url' => 'https://docs.totalcms.co/twig/builder/'],
+			['label' => 'Bundled Extensions',            'url' => 'https://docs.totalcms.co/extensions/bundled/'],
 		],
 		'url' => 'https://docs.totalcms.co/builder/overview/',
 	];
