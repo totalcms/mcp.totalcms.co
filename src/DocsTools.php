@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace TotalCMS\Mcp;
 
-use Mcp\Capability\Attribute\McpTool;
-use Mcp\Schema\ToolAnnotations;
-
 /**
  * MCP tools for querying Total CMS documentation.
  *
@@ -30,11 +27,6 @@ class DocsTools
 	 * Search across all Total CMS documentation. Use this for general questions
 	 * about Total CMS features, configuration, or usage.
 	 */
-	#[McpTool(
-		name: 'docs_search',
-		description: 'Full-text search across all Total CMS documentation. Returns matching sections with context and source URLs.',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function search(string $query): string
 	{
 		$query = strtolower(trim($query));
@@ -78,11 +70,6 @@ class DocsTools
 	 * Look up a specific Twig function by name. Returns the function signature,
 	 * parameters, return type, description, and usage examples.
 	 */
-	#[McpTool(
-		name: 'docs_twig_function',
-		description: 'Look up a Total CMS Twig function by name. Returns signature, parameters, return type, and examples. Example: docs_twig_function("cms.objects")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function twigFunction(string $name): string
 	{
 		$name = strtolower(trim($name));
@@ -119,11 +106,6 @@ class DocsTools
 	 * Look up a specific Twig filter by name. Returns the filter signature,
 	 * description, and usage examples.
 	 */
-	#[McpTool(
-		name: 'docs_twig_filter',
-		description: 'Look up a Total CMS Twig filter by name. Returns signature, description, and examples. Example: docs_twig_filter("dateFormat")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function twigFilter(string $name): string
 	{
 		$name = strtolower(trim($name));
@@ -159,11 +141,6 @@ class DocsTools
 	 * Look up a field type by name. Returns configuration options, schema settings,
 	 * and usage examples.
 	 */
-	#[McpTool(
-		name: 'docs_field_type',
-		description: 'Look up a Total CMS field type by name. Returns configuration options, schema settings, and examples. Example: docs_field_type("image")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function fieldType(string $name): string
 	{
 		$name = strtolower(trim($name));
@@ -199,11 +176,6 @@ class DocsTools
 	 * Look up a REST API endpoint. Returns the HTTP method, path, parameters,
 	 * headers, and response shape.
 	 */
-	#[McpTool(
-		name: 'docs_api_endpoint',
-		description: 'Look up a Total CMS REST API endpoint. Returns method, path, parameters, and response shape. Example: docs_api_endpoint("GET", "/collections/{name}")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function apiEndpoint(string $method, string $path): string
 	{
 		$method = strtoupper(trim($method));
@@ -246,11 +218,6 @@ class DocsTools
 	 * Look up a schema configuration option. Returns the option description,
 	 * valid values, and defaults.
 	 */
-	#[McpTool(
-		name: 'docs_schema_config',
-		description: 'Look up a Total CMS schema or collection configuration option. Returns description, valid values, and defaults. Example: docs_schema_config("labelPlural")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function schemaConfig(string $key): string
 	{
 		$key = strtolower(trim($key));
@@ -285,11 +252,6 @@ class DocsTools
 	/**
 	 * Look up a CLI command. Returns the command syntax, arguments, options, and usage examples.
 	 */
-	#[McpTool(
-		name: 'docs_cli_command',
-		description: 'Look up a Total CMS CLI command by name. Returns syntax, arguments, options, and usage examples. Example: docs_cli_command("collection:query")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function cliCommand(string $name): string
 	{
 		$name = strtolower(trim($name));
@@ -399,11 +361,6 @@ class DocsTools
 	 * permission, or manifest field. Returns detailed information about the
 	 * extension system for building extensions.
 	 */
-	#[McpTool(
-		name: 'docs_extension',
-		description: 'Look up Total CMS extension API details: context methods, events, permissions, manifest fields, or bundled extensions. Example: docs_extension("addTwigFunction"), docs_extension("object.created"), docs_extension("permissions"), docs_extension("bundled"), docs_extension("totalcms/ab-split"), or docs_extension("geo-redirect")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function extension(string $query): string
 	{
 		$query = strtolower(trim($query));
@@ -535,11 +492,6 @@ class DocsTools
 	 * a starter id (e.g. "blog"), a page schema field (e.g. "route", "middleware"),
 	 * a CLI command, or a page-feature name (e.g. "auth", "ab-split", "geo-redirect").
 	 */
-	#[McpTool(
-		name: 'docs_builder',
-		description: 'Look up Total CMS Site Builder details: page schema, directory structure, twig functions, asset pipeline, starter templates, CLI commands, route patterns, and page features (middleware). Use this when helping users build site templates and frontends. Examples: docs_builder("overview"), docs_builder("schema"), docs_builder("twig"), docs_builder("starters"), docs_builder("features"), docs_builder("cms.builder.nav"), docs_builder("blog"), docs_builder("ab-split")',
-		annotations: new ToolAnnotations(readOnlyHint: true),
-	)]
 	public function builder(string $query): string
 	{
 		$query = strtolower(trim($query));
