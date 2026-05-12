@@ -17,7 +17,7 @@
     },
     "require": {
         "php": "^8.2",
-        "mcp/sdk": "^0.4.0",
+        "mcp/sdk": "^0.5.0",
         "php-http/discovery": "^1.20",
         "guzzlehttp/psr7": "^2.9",
         "laminas/laminas-httphandlerrunner": "^2.13"
