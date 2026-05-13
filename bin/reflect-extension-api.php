@@ -256,6 +256,263 @@ function renderExpr(Node\Expr $expr): string
 }
 
 /**
+ * Reflect the Edition enum's cases and level() values.
+ *
+ * @return list<array{edition: string, level: int, description: string}>
+ */
+function reflectEditions(string $totalcmsPath): array
+{
+	$file = $totalcmsPath . '/src/Domain/License/Data/Edition.php';
+	if (!is_file($file)) {
+		throw new RuntimeException("Edition enum not found at {$file}");
+	}
+
+	$source = file_get_contents($file);
+	$parser = (new ParserFactory())->createForHostVersion();
+	$ast = $parser->parse($source) ?? [];
+	$finder = new NodeFinder();
+
+	/** @var Node\Stmt\Enum_|null $enum */
+	$enum = $finder->findFirstInstanceOf($ast, Node\Stmt\Enum_::class);
+	if ($enum === null) {
+		throw new RuntimeException("No enum found in {$file}");
+	}
+
+	// Build case-name => level map by walking the level() match expression.
+	$levels = extractEditionLevels($enum);
+
+	$descriptions = [
+		'lite'        => 'Basic edition, available to all',
+		'standard'    => 'Standard features including custom collections',
+		'pro'         => 'Full features including custom schemas and extensions schemas',
+		'enterprise'  => 'Pro features plus enterprise support',
+		'development' => 'Developer license for local/staging use',
+		'trial'       => 'Time-limited evaluation license',
+		'unknown'     => 'No license detected',
+	];
+
+	$editions = [];
+	foreach ($enum->stmts as $stmt) {
+		if (!$stmt instanceof Node\Stmt\EnumCase) {
+			continue;
+		}
+		$value = $stmt->expr instanceof Node\Scalar\String_ ? $stmt->expr->value : strtolower($stmt->name->toString());
+		$editions[] = [
+			'edition'     => $value,
+			'level'       => $levels[$stmt->name->toString()] ?? 0,
+			'description' => $descriptions[$value] ?? "Edition: {$value}",
+		];
+	}
+
+	return $editions;
+}
+
+/**
+ * Walk Edition::level()'s match expression and map each case identifier to its int.
+ *
+ * @return array<string,int>
+ */
+function extractEditionLevels(Node\Stmt\Enum_ $enum): array
+{
+	$levels = [];
+	foreach ($enum->getMethods() as $method) {
+		if ($method->name->toString() !== 'level') {
+			continue;
+		}
+		$finder = new NodeFinder();
+		/** @var Node\Expr\Match_|null $match */
+		$match = $finder->findFirstInstanceOf((array) $method->stmts, Node\Expr\Match_::class);
+		if ($match === null) {
+			continue;
+		}
+		foreach ($match->arms as $arm) {
+			if (!$arm->body instanceof Node\Scalar\Int_) {
+				continue;
+			}
+			$level = $arm->body->value;
+			foreach ((array) $arm->conds as $cond) {
+				if ($cond instanceof Node\Expr\ClassConstFetch && $cond->name instanceof Node\Identifier) {
+					$levels[$cond->name->toString()] = $level;
+				}
+			}
+		}
+	}
+	return $levels;
+}
+
+/**
+ * Reflect the ExtensionManifest constructor's parameters, pairing each with
+ * its @param docblock description. The "required" flag is hand-mapped — the
+ * constructor signature alone doesn't tell us which fields a user must
+ * actually supply (fromArray() applies defaults for almost everything).
+ *
+ * @return list<array{field: string, required: bool, description: string}>
+ */
+function reflectManifestFields(string $totalcmsPath): array
+{
+	$file = $totalcmsPath . '/src/Domain/Extension/Data/ExtensionManifest.php';
+	if (!is_file($file)) {
+		throw new RuntimeException("ExtensionManifest source not found at {$file}");
+	}
+
+	$classNode = parseClassFromFile($file, 'ExtensionManifest');
+	$ctor = null;
+	foreach ($classNode->getMethods() as $method) {
+		if ($method->name->toString() === '__construct') {
+			$ctor = $method;
+			break;
+		}
+	}
+	if ($ctor === null) {
+		throw new RuntimeException('ExtensionManifest has no constructor');
+	}
+
+	// Pull @param descriptions out of the constructor's docblock.
+	$paramDocs = [];
+	$docComment = $ctor->getDocComment();
+	if ($docComment !== null) {
+		try {
+			$docBlock = DocBlockFactory::createInstance()->create($docComment->getText());
+			foreach ($docBlock->getTagsByName('param') as $tag) {
+				if ($tag instanceof \phpDocumentor\Reflection\DocBlock\Tags\Param) {
+					$paramDocs[$tag->getVariableName()] = cleanDocblockText((string) $tag->getDescription());
+				}
+			}
+		} catch (\Throwable) {
+			// Fall back to empty descriptions.
+		}
+	}
+
+	// Required fields are those the system actually needs — id/name/version.
+	// Internal fields (set by discovery, not by the manifest author) are skipped.
+	$required = ['id' => true, 'name' => true, 'version' => true];
+	$skip = ['bundled' => true]; // ExtensionDiscovery sets this, not the JSON
+
+	$fields = [];
+	foreach ($ctor->params as $param) {
+		$name = $param->var->name;
+		if (isset($skip[$name])) {
+			continue;
+		}
+		$jsonKey = camelToSnake($name); // settingsSchema -> settings_schema
+		$fields[] = [
+			'field'       => $jsonKey,
+			'required'    => isset($required[$jsonKey]),
+			'description' => $paramDocs[$name] ?? '',
+		];
+	}
+
+	return $fields;
+}
+
+/**
+ * Reflect the bundled extensions that ship in resources/extensions/.
+ * Reads each extension.json so adding a new bundled extension auto-shows
+ * up in the MCP API surface without a code change here.
+ *
+ * @return list<array{id: string, name: string, description: string, version: string, url: string}>
+ */
+function reflectBundledExtensions(string $totalcmsPath): array
+{
+	$baseDir = $totalcmsPath . '/resources/extensions';
+	if (!is_dir($baseDir)) {
+		return [];
+	}
+
+	$found = [];
+	foreach (glob($baseDir . '/*/*/extension.json') ?: [] as $manifestFile) {
+		$decoded = json_decode((string) file_get_contents($manifestFile), true);
+		if (!is_array($decoded) || empty($decoded['id'])) {
+			continue;
+		}
+		$shortName = basename(dirname($manifestFile));
+		$found[] = [
+			'id'          => (string) $decoded['id'],
+			'name'        => (string) ($decoded['name'] ?? $shortName),
+			'description' => (string) ($decoded['description'] ?? ''),
+			'version'     => (string) ($decoded['version'] ?? ''),
+			'url'         => 'https://docs.totalcms.co/extensions/bundled/' . $shortName . '/',
+		];
+	}
+
+	// Sort by id for stable output.
+	usort($found, fn (array $a, array $b): int => strcmp($a['id'], $b['id']));
+
+	return $found;
+}
+
+/**
+ * Parse content events from the docs file. Each event is an H3 with the
+ * event name in backticks, followed by a description paragraph and a
+ * payload table.
+ *
+ * @return list<array{name: string, description: string, payload: array<string,string>}>
+ */
+function parseEventsFromDocs(string $totalcmsPath): array
+{
+	$file = $totalcmsPath . '/resources/docs/extensions/events.md';
+	if (!is_file($file)) {
+		return [];
+	}
+
+	$source = file_get_contents($file);
+	// Strip frontmatter.
+	$source = (string) preg_replace('/^---\s*\n.*?\n---\s*\n/s', '', $source);
+
+	$events = [];
+	// Each H3 starting with a backticked name introduces an event.
+	$sections = preg_split('/^###\s+`([^`]+)`\s*\n/m', $source, -1, PREG_SPLIT_DELIM_CAPTURE);
+
+	// preg_split returns [pre-content, name1, body1, name2, body2, ...]
+	for ($i = 1; $i < count($sections); $i += 2) {
+		$name = trim($sections[$i]);
+		$body = $sections[$i + 1] ?? '';
+
+		// Stop at the next H1/H2/H3 (only this section's body).
+		$end = preg_match('/^#{1,3}\s/m', $body, $m, PREG_OFFSET_CAPTURE);
+		if ($end === 1) {
+			$body = substr($body, 0, $m[0][1]);
+		}
+
+		// First non-empty paragraph is the description.
+		$description = '';
+		foreach (explode("\n\n", trim($body)) as $paragraph) {
+			$paragraph = trim($paragraph);
+			if ($paragraph === '' || str_starts_with($paragraph, '|') || str_starts_with($paragraph, '```')) {
+				continue;
+			}
+			$description = (string) preg_replace('/\s+/', ' ', $paragraph);
+			break;
+		}
+
+		// Payload table rows: | `key` | `type` | description |
+		$payload = [];
+		if (preg_match_all('/\|\s*`(\w+)`\s*\|\s*`([^`]+)`\s*\|\s*[^|\n]+\|/m', $body, $rows, PREG_SET_ORDER)) {
+			foreach ($rows as $row) {
+				$payload[$row[1]] = $row[2];
+			}
+		}
+
+		$events[] = [
+			'name'        => $name,
+			'description' => $description,
+			'payload'     => $payload,
+		];
+	}
+
+	return $events;
+}
+
+/**
+ * camelCase -> snake_case helper used to translate ExtensionManifest
+ * constructor params (settingsSchema) to their JSON keys (settings_schema).
+ */
+function camelToSnake(string $input): string
+{
+	return strtolower((string) preg_replace('/([a-z])([A-Z])/', '$1_$2', $input));
+}
+
+/**
  * Pull a one-line description out of the method's docblock — uses summary
  * when present, falls back to the first sentence of the long description.
  */

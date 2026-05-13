@@ -537,9 +537,43 @@ function buildExtensionApiReference(string $totalcmsPath): array
 	require_once __DIR__ . '/reflect-extension-api.php';
 
 	// Auto-derive the contract surface from T3 source so new ExtensionContext
-	// methods or capability labels show up without anyone touching this file.
-	$contextMethods = reflectContextMethods($totalcmsPath);
-	$capabilityLabels = reflectCapabilityLabels($totalcmsPath);
+	// methods, capability labels, manifest fields, editions, bundled extensions,
+	// and content events show up without anyone touching this file.
+	$contextMethods    = reflectContextMethods($totalcmsPath);
+	$capabilityLabels  = reflectCapabilityLabels($totalcmsPath);
+	$manifestFields    = reflectManifestFields($totalcmsPath);
+	$editions          = reflectEditions($totalcmsPath);
+	$bundledExtensions = reflectBundledExtensions($totalcmsPath);
+	$events            = parseEventsFromDocs($totalcmsPath);
+
+	// Per-bundled-extension detail that isn't in the extension.json manifest
+	// (page_feature name, page.data keys, cookies, headers, limitations).
+	// Keyed by extension id so new bundled extensions show up via reflection
+	// even before someone adds an entry here.
+	$bundledDetail = [
+		'totalcms/ab-split' => [
+			'page_feature'   => 'ab-split',
+			'page_data_keys' => [
+				['key' => 'abTemplate', 'type' => 'string', 'description' => 'Path to variant-B template (e.g. pages/contact-b.twig). Required — empty or missing means the middleware no-ops and the page renders normally.'],
+				['key' => 'abPercent',  'type' => 'int',    'default' => 50, 'description' => 'Percentage of visitors sent to variant B. Clamped to 0-100. Use 100 to force every visitor onto B for validation; 0 effectively disables the split.'],
+			],
+			'cookie'      => ['name' => 'tcms_ab_<page-id>', 'value' => 'a or b', 'ttl' => '30 days', 'path' => '/', 'samesite' => 'Lax'],
+			'limitations' => ['Two variants only (A/B, no multivariate)', 'Builder pages only — collection-URL matches not supported', 'No built-in analytics — read the cookie client-side and tag your analytics events'],
+		],
+		'totalcms/geo-redirect' => [
+			'page_feature'   => 'geo-redirect',
+			'page_data_keys' => [
+				['key' => 'geoRedirects', 'type' => 'object', 'description' => 'Map of ISO 3166-1 alpha-2 country code (e.g. "DE", "FR") to target URL. Use "*" as wildcard fallback for unlisted countries. Targets can be paths, absolute URLs, or include query strings.'],
+			],
+			'country_headers'  => ['CF-IPCountry (Cloudflare)', 'X-Country-Code (generic / DIY proxies)', 'X-Vercel-IP-Country (Vercel)'],
+			'response_headers' => ['Vary: CF-IPCountry, X-Country-Code, X-Vercel-IP-Country'],
+			'limitations'      => ['Country-level only, no city/region precision', 'Not a strong access-control mechanism — bypassable with VPN or header manipulation', 'Builder pages only — collection-URL matches not supported'],
+		],
+	];
+	$bundledExtensions = array_map(
+		fn (array $b): array => array_merge($b, $bundledDetail[$b['id']] ?? []),
+		$bundledExtensions,
+	);
 
 	// The reflected label ("Twig Functions") is admin-UI friendly. AI agents
 	// want a verb-leading description. This table augments where we have one;
@@ -574,153 +608,30 @@ function buildExtensionApiReference(string $totalcmsPath): array
 		'min_version' => '3.3.0',
 		'note' => 'The extension system requires Total CMS 3.3.0 or later. It is not available in earlier versions.',
 		'context_methods' => $contextMethods,
-		'events' => [
-			[
-				'name'        => 'object.created',
-				'description' => 'Fired after a new object is saved',
-				'payload'     => ['collection' => 'string', 'id' => 'string'],
-			],
-			[
-				'name'        => 'object.updated',
-				'description' => 'Fired after an existing object is updated',
-				'payload'     => ['collection' => 'string', 'id' => 'string'],
-			],
-			[
-				'name'        => 'object.deleted',
-				'description' => 'Fired after an object is deleted',
-				'payload'     => ['collection' => 'string', 'id' => 'string'],
-			],
-			[
-				'name'        => 'collection.created',
-				'description' => 'Fired after a new collection is created',
-				'payload'     => ['collection' => 'string'],
-			],
-			[
-				'name'        => 'collection.updated',
-				'description' => 'Fired after a collection is updated',
-				'payload'     => ['collection' => 'string'],
-			],
-			[
-				'name'        => 'collection.deleted',
-				'description' => 'Fired after a collection is deleted',
-				'payload'     => ['collection' => 'string'],
-			],
-			[
-				'name'        => 'import.completed',
-				'description' => 'Fired after a batch import (CSV, JSON, or URL) completes',
-				'payload'     => ['collection' => 'string', 'count' => 'int'],
-			],
-			[
-				'name'        => 'schema.saved',
-				'description' => 'Fired after a schema is created or updated',
-				'payload'     => ['schema' => 'string'],
-			],
-			[
-				'name'        => 'schema.deleted',
-				'description' => 'Fired after a schema is deleted',
-				'payload'     => ['schema' => 'string'],
-			],
-			[
-				'name'        => 'user.login',
-				'description' => 'Fired after a user successfully logs in',
-				'payload'     => ['user' => 'string'],
-			],
-			[
-				'name'        => 'user.logout',
-				'description' => 'Fired after a user logs out',
-				'payload'     => ['user' => 'string'],
-			],
-			[
-				'name'        => 'extension.enabled',
-				'description' => 'Fired after an extension is enabled',
-				'payload'     => ['id' => 'string'],
-			],
-			[
-				'name'        => 'extension.disabled',
-				'description' => 'Fired after an extension is disabled',
-				'payload'     => ['id' => 'string'],
-			],
-			[
-				'name'        => 'cache.cleared',
-				'description' => 'Fired after the cache is cleared. Payload is the per-backend results map (SystemEventPayload).',
-				'payload'     => ['data' => 'array'],
-			],
-			[
-				'name'        => 'devmode.enabled',
-				'description' => 'Fired when developer mode is enabled (cache disabled, debug output on). Payload includes the enabling user.',
-				'payload'     => ['data' => 'array'],
-			],
-			[
-				'name'        => 'devmode.disabled',
-				'description' => 'Fired when developer mode is disabled. Empty SystemEventPayload.',
-				'payload'     => ['data' => 'array'],
-			],
-		],
+		'events' => $events,
 		'permissions' => $permissions,
-		'manifest_fields' => [
-			['field' => 'id',              'required' => true,  'description' => 'Unique ID in vendor/name format'],
-			['field' => 'name',            'required' => true,  'description' => 'Human-readable name'],
-			['field' => 'version',         'required' => true,  'description' => 'Semver version (e.g. 1.0.0)'],
-			['field' => 'description',     'required' => false, 'description' => 'Short description'],
-			['field' => 'requires',        'required' => false, 'description' => 'Version constraints (totalcms, php, extensions)'],
-			['field' => 'min_edition',     'required' => false, 'description' => 'Minimum edition: lite, standard, or pro'],
-			['field' => 'entrypoint',      'required' => false, 'description' => 'Path to ExtensionInterface class (default: Extension.php)'],
-			['field' => 'settings_schema', 'required' => false, 'description' => 'Path to settings JSON Schema file'],
-			['field' => 'author',          'required' => false, 'description' => 'Author object with name and url'],
-			['field' => 'license',         'required' => false, 'description' => 'License identifier (default: proprietary)'],
-			['field' => 'links',           'required' => false, 'description' => 'List of {label, url} card links shown in the admin extensions page'],
-			['field' => 'icon',            'required' => false, 'description' => 'Path to icon image displayed in the admin extensions page'],
-		],
-		'editions' => [
-			['edition' => 'lite',     'level' => 1, 'description' => 'Basic edition, available to all'],
-			['edition' => 'standard', 'level' => 2, 'description' => 'Standard features including custom collections'],
-			['edition' => 'pro',      'level' => 3, 'description' => 'Full features including custom schemas and extensions schemas'],
-		],
-		'starter_repo' => 'https://github.com/totalcms/extension-starter',
+		'manifest_fields' => $manifestFields,
+		'editions'        => $editions,
+		'starter_repo'    => 'https://github.com/totalcms/extension-starter',
 		'bundled_extensions' => [
-			'since' => '3.5.0',
-			'note' => 'Bundled extensions ship in the T3 package itself under resources/extensions/. They install automatically (no composer require, no upload), are disabled by default, and cannot be removed — only enabled/disabled. The manifest version field is ignored; they always report the running T3 version. A user-installed extension with the same ID under tcms-data/extensions/ shadows the bundled copy.',
-			'install_path' => 'resources/extensions/{vendor}/{name}/',
+			'since'         => '3.5.0',
+			'note'          => 'Bundled extensions ship in the T3 package itself under resources/extensions/. They install automatically (no composer require, no upload), are disabled by default, and cannot be removed — only enabled/disabled. The manifest version field is ignored; they always report the running T3 version. A user-installed extension with the same ID under tcms-data/extensions/ shadows the bundled copy.',
+			'install_path'  => 'resources/extensions/{vendor}/{name}/',
 			'override_path' => 'tcms-data/extensions/{vendor}/{name}/ (user-installed copy wins on ID collision)',
-			'items' => [
-				[
-					'id'          => 'totalcms/ab-split',
-					'name'        => 'A/B Split',
-					'description' => 'Render an alternate page template at the same URL for a percentage of visitors. Sticky-bucketing via a 30-day cookie. Use for layout, copy, or CTA variations without changing the URL.',
-					'page_feature' => 'ab-split',
-					'page_data_keys' => [
-						['key' => 'abTemplate', 'type' => 'string', 'description' => 'Path to variant-B template (e.g. pages/contact-b.twig). Required — empty or missing means the middleware no-ops and the page renders normally.'],
-						['key' => 'abPercent',  'type' => 'int',    'default' => 50, 'description' => 'Percentage of visitors sent to variant B. Clamped to 0-100. Use 100 to force every visitor onto B for validation; 0 effectively disables the split.'],
-					],
-					'cookie' => ['name' => 'tcms_ab_<page-id>', 'value' => 'a or b', 'ttl' => '30 days', 'path' => '/', 'samesite' => 'Lax'],
-					'limitations' => ['Two variants only (A/B, no multivariate)', 'Builder pages only — collection-URL matches not supported', 'No built-in analytics — read the cookie client-side and tag your analytics events'],
-					'url' => 'https://docs.totalcms.co/extensions/bundled/ab-split/',
-				],
-				[
-					'id'          => 'totalcms/geo-redirect',
-					'name'        => 'Geo Redirect',
-					'description' => 'Redirect visitors based on their country via 302. Reads country from CDN-injected request headers (no IP database). Includes loop prevention and a Vary header so CDN caches separate per-country variants.',
-					'page_feature' => 'geo-redirect',
-					'page_data_keys' => [
-						['key' => 'geoRedirects', 'type' => 'object', 'description' => 'Map of ISO 3166-1 alpha-2 country code (e.g. "DE", "FR") to target URL. Use "*" as wildcard fallback for unlisted countries. Targets can be paths, absolute URLs, or include query strings.'],
-					],
-					'country_headers' => ['CF-IPCountry (Cloudflare)', 'X-Country-Code (generic / DIY proxies)', 'X-Vercel-IP-Country (Vercel)'],
-					'response_headers' => ['Vary: CF-IPCountry, X-Country-Code, X-Vercel-IP-Country'],
-					'limitations' => ['Country-level only, no city/region precision', 'Not a strong access-control mechanism — bypassable with VPN or header manipulation', 'Builder pages only — collection-URL matches not supported'],
-					'url' => 'https://docs.totalcms.co/extensions/bundled/geo-redirect/',
-				],
-			],
+			'items'         => $bundledExtensions,
 			'cli' => [
 				'tcms extension:list',
 				'tcms extension:enable totalcms/<name>',
 				'tcms extension:disable totalcms/<name>',
 				'tcms extension:remove totalcms/<name>  # refuses with a friendly error pointing at disable',
 			],
-			'docs' => [
-				['label' => 'Bundled Extensions Overview', 'url' => 'https://docs.totalcms.co/extensions/bundled/'],
-				['label' => 'A/B Split',                   'url' => 'https://docs.totalcms.co/extensions/bundled/ab-split/'],
-				['label' => 'Geo Redirect',                'url' => 'https://docs.totalcms.co/extensions/bundled/geo-redirect/'],
-			],
+			'docs' => array_merge(
+				[['label' => 'Bundled Extensions Overview', 'url' => 'https://docs.totalcms.co/extensions/bundled/']],
+				array_map(
+					fn (array $b): array => ['label' => $b['name'], 'url' => $b['url']],
+					$bundledExtensions,
+				),
+			),
 		],
 		'url' => 'https://docs.totalcms.co/extensions/overview/',
 	];
