@@ -1,0 +1,75 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run test suite
+        run: composer test
+
+  build-index:
+    name: Build index against T3 develop
+    runs-on: ubuntu-latest
+    # Only on push to master — PR builds against develop don't need this
+    # cross-repo dependency check.
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Build index from current totalcms/cms@develop
+        run: bin/build.sh
+
+      - name: Show index counts
+        run: |
+          php -r '
+            $idx = json_decode(file_get_contents("data/index.json"), true);
+            printf("pages: %d\n", count($idx["pages"]));
+            printf("twig_functions: %d\n", count($idx["twig_functions"]));
+            printf("twig_filters: %d\n", count($idx["twig_filters"]));
+            printf("cli_commands: %d\n", count($idx["cli_commands"]));
+            printf("extension_api.context_methods: %d\n", count($idx["extension_api"]["context_methods"]));
+            printf("extension_api.events: %d\n", count($idx["extension_api"]["events"]));
+          '
