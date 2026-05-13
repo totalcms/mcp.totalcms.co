@@ -773,7 +773,7 @@ function buildBuilderApiReference(): array
  */
 const INDEX_MINIMUM_COUNTS = [
 	'pages'          => 80,
-	'twig_functions' => 100,
+	'twig_functions' => 180, // ~75% of current ~247 (reflection finds the cms.* adapter surface)
 	'twig_filters'   => 50,
 	'field_types'    => 15,
 	'api_endpoints'  => 20,

@@ -106,16 +106,21 @@ echo "  Twig filters: " . count($twigFilters) . "\n";
 // -------------------------------------------------------
 // Parse Twig functions from multiple files
 // -------------------------------------------------------
+require_once __DIR__ . '/reflect-twig-functions.php';
+
 $twigFunctions = [];
 
-// functions.md has standalone functions
+// functions.md has standalone (non-cms.*) helpers.
 $functionsFile = $docsDir . '/twig/functions.md';
 if (file_exists($functionsFile)) {
 	$content = file_get_contents($functionsFile);
 	$twigFunctions = array_merge($twigFunctions, parseFunctionSignatures($content));
 }
 
-// Parse cms.* namespace functions from various files
+// cms.* namespace functions: reflection over the TotalCMSTwigAdapter and
+// each sub-adapter is the canonical existence source. Docs files supply
+// example snippets where written. Doc-only entries are flagged as stale.
+$documentedNamespaceFns = [];
 $twigNamespaceFiles = [
 	'twig/collections.md',
 	'twig/data.md',
@@ -135,16 +140,30 @@ $twigNamespaceFiles = [
 	'twig/load-more.md',
 	'twig/utils.md',
 ];
-
 foreach ($twigNamespaceFiles as $relPath) {
 	$filePath = $docsDir . '/' . $relPath;
 	if (file_exists($filePath)) {
 		$content = file_get_contents($filePath);
-		$twigFunctions = array_merge($twigFunctions, parseNamespaceFunctions($content, $relPath));
+		$documentedNamespaceFns = array_merge($documentedNamespaceFns, parseNamespaceFunctions($content, $relPath));
 	}
 }
 
-echo "  Twig functions: " . count($twigFunctions) . "\n";
+$reflectedNamespaceFns = reflectCmsTwigFunctions($totalcmsPath);
+[$mergedNamespaceFns, $staleDocs] = mergeTwigFunctions($reflectedNamespaceFns, $documentedNamespaceFns);
+$twigFunctions = array_merge($twigFunctions, $mergedNamespaceFns);
+
+echo "  Twig functions: " . count($twigFunctions)
+	. " (cms.*: " . count($reflectedNamespaceFns) . " reflected, "
+	. count($documentedNamespaceFns) . " documented";
+if ($staleDocs !== []) {
+	echo ", " . count($staleDocs) . " doc-only — possibly stale";
+}
+echo ")\n";
+if ($staleDocs !== [] && count($staleDocs) <= 10) {
+	foreach ($staleDocs as $name) {
+		echo "    ⚠ doc-only: {$name}\n";
+	}
+}
 
 // -------------------------------------------------------
 // Parse field types from property-settings docs
