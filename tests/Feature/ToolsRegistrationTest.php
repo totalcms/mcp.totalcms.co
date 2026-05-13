@@ -15,25 +15,25 @@ it('exposes the expected MCP tool names', function (): void {
 		'docs_twig_function',
 	];
 
-	expect(mcpToolNamesFromIndexPhp())->toBe($expected);
+	expect(mcpToolNamesFromFactory())->toBe($expected);
 });
 
 it('binds every registered tool handler to a DocsTools method', function (): void {
-	$handlers     = handlerMethodNamesFromIndexPhp();
+	$handlers     = handlerMethodNamesFromFactory();
 	$publicMethods = publicToolMethodNames();
 
 	$missing = array_diff($handlers, $publicMethods);
 
 	expect($missing)->toBe(
 		[],
-		'public/index.php references a $tools->method() that does not exist on DocsTools: '
+		'McpServerFactory references a $tools->method() that does not exist on DocsTools: '
 		. implode(', ', $missing)
 	);
 });
 
 it('registers a handler for every public method on DocsTools', function (): void {
 	$publicMethods = publicToolMethodNames();
-	$handlers     = handlerMethodNamesFromIndexPhp();
+	$handlers     = handlerMethodNamesFromFactory();
 
 	$unregistered = array_diff($publicMethods, $handlers);
 
@@ -41,6 +41,6 @@ it('registers a handler for every public method on DocsTools', function (): void
 		[],
 		'DocsTools has public methods that no tool handler calls: '
 		. implode(', ', $unregistered)
-		. ' (either register the tool in public/index.php or make the method private/protected)'
+		. ' (either register the tool in McpServerFactory or make the method private/protected)'
 	);
 });

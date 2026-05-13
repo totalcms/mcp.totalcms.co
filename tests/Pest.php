@@ -40,13 +40,14 @@ function publicToolMethodNames(): array
 }
 
 /**
- * Return the tool names registered with $builder->addTool(name: '...') in public/index.php.
+ * Return the tool names registered with $builder->addTool(name: '...') in
+ * src/McpServerFactory.php.
  *
  * @return string[]
  */
-function mcpToolNamesFromIndexPhp(): array
+function mcpToolNamesFromFactory(): array
 {
-	$source = file_get_contents(__DIR__ . '/../public/index.php');
+	$source = file_get_contents(__DIR__ . '/../src/McpServerFactory.php');
 
 	// Strip PHP comments via the tokenizer so commented-out addTool blocks
 	// don't get picked up by the regex below.
@@ -58,7 +59,6 @@ function mcpToolNamesFromIndexPhp(): array
 		$stripped .= $token->text;
 	}
 
-	// Match each ->addTool(...) call and capture the name: 'xxx' inside it.
 	preg_match_all('/->addTool\b.*?name:\s*[\'"]([^\'"]+)[\'"]/s', $stripped, $matches);
 	$names = $matches[1];
 	sort($names);
@@ -67,13 +67,13 @@ function mcpToolNamesFromIndexPhp(): array
 
 /**
  * Return the handler method names referenced by $tools->methodName(...) inside
- * addTool() handler closures in public/index.php.
+ * addTool() handler closures in src/McpServerFactory.php.
  *
  * @return string[]
  */
-function handlerMethodNamesFromIndexPhp(): array
+function handlerMethodNamesFromFactory(): array
 {
-	$source = file_get_contents(__DIR__ . '/../public/index.php');
+	$source = file_get_contents(__DIR__ . '/../src/McpServerFactory.php');
 
 	$stripped = '';
 	foreach (PhpToken::tokenize($source) as $token) {
@@ -83,7 +83,6 @@ function handlerMethodNamesFromIndexPhp(): array
 		$stripped .= $token->text;
 	}
 
-	// Match `$tools->methodName(` inside the file.
 	preg_match_all('/\$tools->(\w+)\s*\(/', $stripped, $matches);
 	$names = array_values(array_unique($matches[1]));
 	sort($names);
