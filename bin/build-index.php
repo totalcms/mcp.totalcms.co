@@ -251,7 +251,7 @@ echo "  CLI commands: " . count($cliCommands) . "\n";
 // -------------------------------------------------------
 // Build the final index
 // -------------------------------------------------------
-$extensionApi = buildExtensionApiReference();
+$extensionApi = buildExtensionApiReference($totalcmsPath);
 $builderApi   = buildBuilderApiReference();
 
 $index = [

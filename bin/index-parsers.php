@@ -532,167 +532,48 @@ function parseCliCommands(string $content, string $url = 'https://docs.totalcms.
  *
  * @return array<string, mixed>
  */
-function buildExtensionApiReference(): array
+function buildExtensionApiReference(string $totalcmsPath): array
 {
+	require_once __DIR__ . '/reflect-extension-api.php';
+
+	// Auto-derive the contract surface from T3 source so new ExtensionContext
+	// methods or capability labels show up without anyone touching this file.
+	$contextMethods = reflectContextMethods($totalcmsPath);
+	$capabilityLabels = reflectCapabilityLabels($totalcmsPath);
+
+	// The reflected label ("Twig Functions") is admin-UI friendly. AI agents
+	// want a verb-leading description. This table augments where we have one;
+	// new permissions appear with the short label as a graceful fallback.
+	$permissionDescriptions = [
+		'twig:functions'  => 'Register custom Twig functions',
+		'twig:filters'    => 'Register custom Twig filters',
+		'twig:globals'    => 'Register Twig global variables',
+		'routes:api'      => 'Register authenticated API endpoints',
+		'routes:admin'    => 'Register admin pages',
+		'routes:public'   => 'Register unauthenticated public endpoints',
+		'cli:commands'    => 'Register CLI commands',
+		'admin:nav'       => 'Add items to admin navigation',
+		'admin:widgets'   => 'Add dashboard widgets',
+		'admin:assets'    => 'Load CSS/JS in the admin interface',
+		'frontend:assets' => 'Load CSS/JS on public pages',
+		'events:listen'   => 'Subscribe to content events',
+		'fields'          => 'Register custom field types',
+		'schemas'         => 'Install user-editable schemas (Pro+ only)',
+		'container'       => 'Register DI container services',
+		'page-middleware' => 'Register page-features middleware (since 3.5.0)',
+	];
+	$permissions = array_map(
+		fn (array $p): array => [
+			'id'          => $p['id'],
+			'description' => $permissionDescriptions[$p['id']] ?? $p['description'],
+		],
+		$capabilityLabels,
+	);
+
 	return [
 		'min_version' => '3.3.0',
 		'note' => 'The extension system requires Total CMS 3.3.0 or later. It is not available in earlier versions.',
-		'context_methods' => [
-			[
-				'name'        => 'extensionId',
-				'signature'   => 'extensionId(): string',
-				'description' => 'Get the extension ID (e.g. "vendor/extension-name")',
-				'phase'       => 'both',
-			],
-			[
-				'name'        => 'extensionPath',
-				'signature'   => 'extensionPath(): string',
-				'description' => 'Get the absolute filesystem path to the extension directory',
-				'phase'       => 'both',
-			],
-			[
-				'name'        => 'manifest',
-				'signature'   => 'manifest(): ExtensionManifest',
-				'description' => 'Get the parsed extension manifest',
-				'phase'       => 'both',
-			],
-			[
-				'name'        => 'settings',
-				'signature'   => 'settings(): array',
-				'description' => 'Get all extension settings from tcms-data',
-				'phase'       => 'both',
-				'permission'  => 'settings:read',
-			],
-			[
-				'name'        => 'setting',
-				'signature'   => 'setting(string $key, mixed $default = null): mixed',
-				'description' => 'Get a single extension setting value',
-				'phase'       => 'both',
-			],
-			[
-				'name'        => 'logger',
-				'signature'   => 'logger(): \\Psr\\Log\\LoggerInterface',
-				'description' => 'Get the shared extensions logger (writes to tcms-data/logs/extensions.log on the "extensions" channel). Prefix messages with the extension id so multi-extension logs remain readable.',
-				'phase'       => 'both',
-			],
-			[
-				'name'        => 'get',
-				'signature'   => 'get(string $serviceId): mixed',
-				'description' => 'Resolve a service from the DI container. Only use in boot(), not register().',
-				'phase'       => 'boot',
-			],
-			[
-				'name'        => 'has',
-				'signature'   => 'has(string $serviceId): bool',
-				'description' => 'Check if a service exists in the DI container',
-				'phase'       => 'boot',
-			],
-			[
-				'name'        => 'installSchema',
-				'signature'   => 'installSchema(array $schemaData): void',
-				'description' => 'Install a user-editable schema into tcms-data/.schemas/. Skips if schema already exists. Pro+ only.',
-				'phase'       => 'boot',
-			],
-			[
-				'name'        => 'addTwigFunction',
-				'signature'   => 'addTwigFunction(TwigFunction $function): void',
-				'description' => 'Register a custom Twig function available in all templates',
-				'phase'       => 'register',
-				'permission'  => 'twig:functions',
-			],
-			[
-				'name'        => 'addTwigFilter',
-				'signature'   => 'addTwigFilter(TwigFilter $filter): void',
-				'description' => 'Register a custom Twig filter',
-				'phase'       => 'register',
-				'permission'  => 'twig:filters',
-			],
-			[
-				'name'        => 'addTwigGlobal',
-				'signature'   => 'addTwigGlobal(string $name, mixed $value): void',
-				'description' => 'Register a Twig global variable',
-				'phase'       => 'register',
-				'permission'  => 'twig:globals',
-			],
-			[
-				'name'        => 'addCommand',
-				'signature'   => 'addCommand(Command $command): void',
-				'description' => 'Register a CLI command. Name must be namespaced (e.g. "vendor:command").',
-				'phase'       => 'register',
-				'permission'  => 'cli:commands',
-			],
-			[
-				'name'        => 'addRoutes',
-				'signature'   => 'addRoutes(callable $registrar): void',
-				'description' => 'Register authenticated API routes under /ext/{vendor}/{name}/. Callable receives RouteCollectorProxy.',
-				'phase'       => 'register',
-				'permission'  => 'routes:api',
-			],
-			[
-				'name'        => 'addAdminRoutes',
-				'signature'   => 'addAdminRoutes(callable $registrar): void',
-				'description' => 'Register admin routes under /admin/ext/{vendor}/{name}/. Protected by admin auth middleware. Templates can extend admin-dashboard.twig.',
-				'phase'       => 'register',
-				'permission'  => 'routes:admin',
-			],
-			[
-				'name'        => 'addPublicRoutes',
-				'signature'   => 'addPublicRoutes(callable $registrar): void',
-				'description' => 'Register unauthenticated public routes under /ext/{vendor}/{name}/. Use for webhooks, embeds, and endpoints accessible without credentials.',
-				'phase'       => 'register',
-				'permission'  => 'routes:public',
-			],
-			[
-				'name'        => 'addAdminNavItem',
-				'signature'   => 'addAdminNavItem(AdminNavItem $item): void',
-				'description' => 'Add a navigation item to the admin sidebar',
-				'phase'       => 'register',
-				'permission'  => 'admin:nav',
-			],
-			[
-				'name'        => 'addDashboardWidget',
-				'signature'   => 'addDashboardWidget(DashboardWidget $widget): void',
-				'description' => 'Add a widget to the admin dashboard',
-				'phase'       => 'register',
-				'permission'  => 'admin:widgets',
-			],
-			[
-				'name'        => 'addAdminAsset',
-				'signature'   => 'addAdminAsset(string $type, string $path): void',
-				'description' => 'Load a CSS or JS file in the admin interface. Type is "css" or "js", path is relative to the extension\'s assets/ directory.',
-				'phase'       => 'register',
-				'permission'  => 'admin:assets',
-			],
-			[
-				'name'        => 'addFieldType',
-				'signature'   => 'addFieldType(string $typeName, string $fqcn, string $defaultType = \'string\'): void',
-				'description' => 'Register a custom field type. Class must extend FormField. The optional $defaultType declares the default schema property type used when an author leaves the property\'s `type` blank (one of SchemaData::PROPERTY_TYPES, e.g. string, color, array).',
-				'phase'       => 'register',
-				'permission'  => 'fields',
-			],
-			[
-				'name'        => 'addEventListener',
-				'signature'   => 'addEventListener(string $eventName, callable $listener, int $priority = 0): void',
-				'description' => 'Subscribe to a content event. Lower priority = earlier execution.',
-				'phase'       => 'register',
-				'permission'  => 'events:listen',
-			],
-			[
-				'name'        => 'addContainerDefinition',
-				'signature'   => 'addContainerDefinition(string $id, callable $factory): void',
-				'description' => 'Register a service in the DI container',
-				'phase'       => 'register',
-				'permission'  => 'container',
-			],
-			[
-				'name'        => 'addPageMiddleware',
-				'signature'   => 'addPageMiddleware(string $name, string $middlewareClass): void',
-				'description' => 'Register a page-features middleware. Class must implement TotalCMS\\Domain\\Builder\\PageMiddleware\\PageMiddlewareInterface. Name must be lowercase letters, digits, and hyphens (e.g. "geo-redirect", "rate-limit"). Once registered, the name appears in the page form\'s Features multiselect; admins opt-in per page.',
-				'phase'       => 'register',
-				'permission'  => 'page-middleware',
-				'since'       => '3.5.0',
-			],
-		],
+		'context_methods' => $contextMethods,
 		'events' => [
 			[
 				'name'        => 'object.created',
@@ -775,23 +656,7 @@ function buildExtensionApiReference(): array
 				'payload'     => ['data' => 'array'],
 			],
 		],
-		'permissions' => [
-			['id' => 'twig:functions', 'description' => 'Register custom Twig functions'],
-			['id' => 'twig:filters',   'description' => 'Register custom Twig filters'],
-			['id' => 'twig:globals',   'description' => 'Register Twig global variables'],
-			['id' => 'cli:commands',   'description' => 'Register CLI commands'],
-			['id' => 'routes:api',     'description' => 'Register authenticated API endpoints'],
-			['id' => 'routes:admin',   'description' => 'Register admin pages'],
-			['id' => 'routes:public',  'description' => 'Register unauthenticated public endpoints'],
-			['id' => 'admin:nav',      'description' => 'Add items to admin navigation'],
-			['id' => 'admin:widgets',  'description' => 'Add dashboard widgets'],
-			['id' => 'admin:assets',   'description' => 'Load CSS/JS in the admin interface'],
-			['id' => 'events:listen',  'description' => 'Subscribe to content events'],
-			['id' => 'fields',         'description' => 'Register custom field types'],
-			['id' => 'schemas',        'description' => 'Install user-editable schemas (Pro+ only)'],
-			['id' => 'container',      'description' => 'Register DI container services'],
-			['id' => 'page-middleware','description' => 'Register page-features middleware (since 3.5.0)'],
-		],
+		'permissions' => $permissions,
 		'manifest_fields' => [
 			['field' => 'id',              'required' => true,  'description' => 'Unique ID in vendor/name format'],
 			['field' => 'name',            'required' => true,  'description' => 'Human-readable name'],
