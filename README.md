@@ -56,8 +56,10 @@ php -S localhost:8765 -t public/
 
 ```bash
 bin/build.sh /path/to/totalcms     # build from a local T3 checkout
-bin/build.sh                       # composer-install totalcms/cms into a temp dir and build from there
+bin/build.sh                       # shallow-clone totalcms/cms from GitHub and build from there
 ```
+
+The no-arg path defaults to `https://github.com/totalcms/cms.git` on the `develop` branch — override with `TOTALCMS_REPO` and `TOTALCMS_BRANCH` env vars if needed (e.g. `TOTALCMS_BRANCH=main bin/build.sh`).
 
 `data/index.json` is a build artifact and is not committed to the repo.
 
