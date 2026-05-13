@@ -123,3 +123,54 @@ it('extractH1 returns the first H1 heading', function (): void {
 	expect(extractH1("# Hello\n## World"))->toBe('Hello');
 	expect(extractH1("no heading"))->toBeNull();
 });
+
+it('validateIndexCounts passes a healthy index', function (): void {
+	$index = [
+		'pages'          => array_fill(0, 100, 'p'),
+		'twig_functions' => array_fill(0, 140, 'f'),
+		'twig_filters'   => array_fill(0, 80,  'f'),
+		'field_types'    => array_fill(0, 20,  't'),
+		'api_endpoints'  => array_fill(0, 30,  'e'),
+		'schema_config'  => array_fill(0, 30,  'c'),
+		'cli_commands'   => array_fill(0, 28,  'c'),
+	];
+
+	expect(validateIndexCounts($index))->toBe([]);
+});
+
+it('validateIndexCounts flags every undersized section', function (): void {
+	$failures = validateIndexCounts([
+		'pages'          => array_fill(0, 40, 'p'), // 80 needed
+		'twig_functions' => array_fill(0, 90, 'f'), // 100 needed
+		// other sections missing entirely
+	]);
+
+	expect($failures)->toContain('pages: 40 (expected >= 80)');
+	expect($failures)->toContain('twig_functions: 90 (expected >= 100)');
+	expect($failures)->toContain('twig_filters: 0 (expected >= 50)');
+	expect($failures)->toContain('cli_commands: 0 (expected >= 20)');
+});
+
+it('validateIndexCounts mimics the pre-3.3 regression (no CLI / extensions docs)', function (): void {
+	// Roughly what an index built against totalcms/cms 3.2.5 would look like.
+	$index = [
+		'pages'          => array_fill(0, 60, 'p'),
+		'twig_functions' => array_fill(0, 80, 'f'),
+		'twig_filters'   => array_fill(0, 60, 'f'),
+		'field_types'    => array_fill(0, 18, 't'),
+		'api_endpoints'  => array_fill(0, 25, 'e'),
+		'schema_config'  => array_fill(0, 22, 'c'),
+		'cli_commands'   => [],
+	];
+
+	$failures = validateIndexCounts($index);
+
+	expect($failures)->not->toBeEmpty();
+	expect(implode("\n", $failures))->toContain('cli_commands');
+});
+
+it('validateIndexCounts accepts custom thresholds for tests', function (): void {
+	expect(validateIndexCounts(['pages' => array_fill(0, 5, 'p')], ['pages' => 3]))->toBe([]);
+	expect(validateIndexCounts(['pages' => array_fill(0, 5, 'p')], ['pages' => 10]))
+		->toBe(['pages: 5 (expected >= 10)']);
+});

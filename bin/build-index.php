@@ -268,6 +268,20 @@ $index = [
 	'builder_api'    => $builderApi,
 ];
 
+// Refuse to write a clearly-broken index — catches building against an old
+// T3 source tree (no CLI / extensions / builder docs) and parser regressions
+// that drop major chunks of content. See INDEX_MINIMUM_COUNTS in index-parsers.php.
+$failures = validateIndexCounts($index);
+if ($failures !== []) {
+	fwrite(STDERR, "\nError: index failed minimum-count sanity check:\n");
+	foreach ($failures as $msg) {
+		fwrite(STDERR, "  - {$msg}\n");
+	}
+	fwrite(STDERR, "\nThe index was NOT written. Likely cause: built against a T3 source tree that\n");
+	fwrite(STDERR, "predates the missing sections, or a parser is silently dropping content.\n");
+	exit(1);
+}
+
 $json = json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 if (!is_dir(dirname($outputFile))) {
 	mkdir(dirname($outputFile), 0755, true);

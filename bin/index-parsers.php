@@ -983,3 +983,48 @@ function buildBuilderApiReference(): array
 		'url' => 'https://docs.totalcms.co/builder/overview/',
 	];
 }
+
+/**
+ * Minimum row counts the built index must have for each top-level section.
+ *
+ * Thresholds are deliberately set well below the current actuals (~50% of
+ * what a healthy build produces) so routine doc edits don't trip the check.
+ * They're tight enough to catch obvious breakage: e.g. building against a
+ * pre-3.3 T3 source tree (no CLI, no Site Builder, no extensions) or against
+ * a broken parser that silently drops entries.
+ *
+ * Update these when the corresponding docs sections grow meaningfully.
+ */
+const INDEX_MINIMUM_COUNTS = [
+	'pages'          => 80,
+	'twig_functions' => 100,
+	'twig_filters'   => 50,
+	'field_types'    => 15,
+	'api_endpoints'  => 20,
+	'schema_config'  => 20,
+	'cli_commands'   => 20,
+];
+
+/**
+ * Validate that the built index has at least the minimum expected rows in
+ * each major section. Returns an array of human-readable failure messages
+ * (empty if the index passes all checks).
+ *
+ * @param array<string, mixed>                       $index
+ * @param array<string, int>|null                    $minimums Override defaults — used by tests
+ * @return string[]
+ */
+function validateIndexCounts(array $index, ?array $minimums = null): array
+{
+	$thresholds = $minimums ?? INDEX_MINIMUM_COUNTS;
+	$failures = [];
+
+	foreach ($thresholds as $key => $minimum) {
+		$actual = is_array($index[$key] ?? null) ? count($index[$key]) : 0;
+		if ($actual < $minimum) {
+			$failures[] = sprintf('%s: %d (expected >= %d)', $key, $actual, $minimum);
+		}
+	}
+
+	return $failures;
+}
