@@ -128,17 +128,26 @@ $twigNamespaceFiles = [
 	'twig/imageworks.md',
 	'twig/variables.md',
 	'twig/totalcms.md',
-	'twig/auth.md',
-	'twig/builder.md',
-	'twig/forms.md',
-	'twig/forms/builder.md',
-	'twig/forms/overview.md',
 	'twig/render.md',
 	'twig/views.md',
 	'twig/locale.md',
 	'twig/localization.md',
 	'twig/load-more.md',
 	'twig/utils.md',
+	// Namespace docs that moved out of twig/ during the docs reorg
+	'auth/twig.md',
+	'admin/twig.md',
+	'schemas/twig.md',
+	'site-builder/twig.md',
+	// Forms group is now top-level
+	'forms/overview.md',
+	'forms/builder.md',
+	'forms/deck.md',
+	'forms/fields.md',
+	'forms/options.md',
+	'forms/patterns.md',
+	'forms/report.md',
+	'forms/specialized.md',
 ];
 foreach ($twigNamespaceFiles as $relPath) {
 	$filePath = $docsDir . '/' . $relPath;
@@ -166,22 +175,29 @@ if ($staleDocs !== [] && count($staleDocs) <= 10) {
 }
 
 // -------------------------------------------------------
-// Parse field types from property-settings docs
+// Parse field types from fields/ docs.
+// Skip files ending in -options.md — those are Field Options (static, relational,
+// sorting, etc.) which describe option sources for select-type fields, not field
+// types themselves.
 // -------------------------------------------------------
 $fieldTypes = [];
-$propSettingsDir = $docsDir . '/property-settings';
-if (is_dir($propSettingsDir)) {
-	$propFiles = glob($propSettingsDir . '/*.md');
+$fieldsDir = $docsDir . '/fields';
+if (is_dir($fieldsDir)) {
+	$propFiles = glob($fieldsDir . '/*.md');
 	foreach ($propFiles as $propFile) {
+		$baseName = basename($propFile);
+		if (str_ends_with($baseName, '-options.md')) {
+			continue;
+		}
 		$content = file_get_contents($propFile);
 		$frontmatter = parseFrontmatter($content);
 		$body = removeFrontmatter($content);
 		$fieldTypes[] = [
-			'name'        => str_replace('.md', '', basename($propFile)),
+			'name'        => str_replace('.md', '', $baseName),
 			'title'       => $frontmatter['title'] ?? basename($propFile, '.md'),
 			'description' => $frontmatter['description'] ?? '',
 			'content'     => cleanForSearch($body),
-			'url'         => 'https://docs.totalcms.co/property-settings/' . str_replace('.md', '/', basename($propFile)),
+			'url'         => 'https://docs.totalcms.co/fields/' . str_replace('.md', '/', $baseName),
 		];
 	}
 }
@@ -209,14 +225,14 @@ echo "  Field types: " . count($fieldTypes) . "\n";
 // Parse REST API endpoints from rest-api.md
 // -------------------------------------------------------
 $apiEndpoints = [];
-$apiFile = $docsDir . '/api/rest-api.md';
+$apiFile = $docsDir . '/apis/rest-api.md';
 if (file_exists($apiFile)) {
 	$content = file_get_contents($apiFile);
 	$apiEndpoints = parseApiEndpoints($content);
 }
 
 // Also check index-filter.md for additional API docs
-$indexFilterFile = $docsDir . '/api/index-filter.md';
+$indexFilterFile = $docsDir . '/apis/index-filter.md';
 if (file_exists($indexFilterFile)) {
 	$content = file_get_contents($indexFilterFile);
 	$apiEndpoints = array_merge($apiEndpoints, parseApiEndpoints($content));
@@ -252,8 +268,8 @@ echo "  Schema config options: " . count($schemaConfig) . "\n";
 // -------------------------------------------------------
 $cliCommands = [];
 $cliSourceFiles = [
-	'advanced/cli.md',
-	'builder/cli.md',
+	'extensions/cli.md',
+	'site-builder/cli.md',
 ];
 foreach ($cliSourceFiles as $relPath) {
 	$filePath = $docsDir . '/' . $relPath;

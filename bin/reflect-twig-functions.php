@@ -52,18 +52,18 @@ const TWIG_SKIP_ROOT_PROPERTIES = [
  * back to the generic /twig/ index.
  */
 const TWIG_NAMESPACE_DOCS = [
-	'form'       => 'https://docs.totalcms.co/twig/forms/builder/',
+	'form'       => 'https://docs.totalcms.co/forms/builder/',
 	'license'    => 'https://docs.totalcms.co/twig/edition/',
 	'edition'    => 'https://docs.totalcms.co/twig/edition/',
 	'render'     => 'https://docs.totalcms.co/twig/render/',
 	'view'       => 'https://docs.totalcms.co/twig/views/',
-	'schema'     => 'https://docs.totalcms.co/twig/schemas/',
-	'auth'       => 'https://docs.totalcms.co/twig/auth/',
+	'schema'     => 'https://docs.totalcms.co/schemas/twig/',
+	'auth'       => 'https://docs.totalcms.co/auth/twig/',
 	'data'       => 'https://docs.totalcms.co/twig/data/',
 	'media'      => 'https://docs.totalcms.co/twig/media/',
 	'collection' => 'https://docs.totalcms.co/twig/collections/',
-	'admin'      => 'https://docs.totalcms.co/twig/admin/',
-	'builder'    => 'https://docs.totalcms.co/twig/builder/',
+	'admin'      => 'https://docs.totalcms.co/admin/twig/',
+	'builder'    => 'https://docs.totalcms.co/site-builder/twig/',
 	'locale'     => 'https://docs.totalcms.co/twig/locale/',
 	'utils'      => 'https://docs.totalcms.co/twig/utils/',
 ];

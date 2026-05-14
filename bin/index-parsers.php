@@ -307,7 +307,7 @@ function parseApiEndpoints(string $content): array
 					'description' => $description,
 					'parameters'  => $parameters,
 					'edition'     => $edition,
-					'url'         => 'https://docs.totalcms.co/api/rest-api/',
+					'url'         => 'https://docs.totalcms.co/apis/rest-api/',
 				];
 			}
 		}
@@ -455,7 +455,7 @@ function extractCodeBlocks(string $section): array
  *
  * @return array<int, array<string, mixed>>
  */
-function parseCliCommands(string $content, string $url = 'https://docs.totalcms.co/advanced/cli/'): array
+function parseCliCommands(string $content, string $url = 'https://docs.totalcms.co/extensions/cli/'): array
 {
 	$commands = [];
 	$frontmatter = parseFrontmatter($content);
@@ -747,16 +747,16 @@ function buildBuilderApiReference(): array
 			'scope' => 'Per-page middleware applies only to builder-page route matches. Collection-URL matches (e.g. /blog/my-post resolved against a collection\'s url field) do NOT currently support per-record middleware — apply your own auth/etc in the collection\'s template.',
 		],
 		'docs' => [
-			['label' => 'Site Builder Overview',         'url' => 'https://docs.totalcms.co/builder/overview/'],
-			['label' => 'Page Features (Middleware)',    'url' => 'https://docs.totalcms.co/builder/overview/#page-features-middleware'],
-			['label' => 'Builder Admin UI',              'url' => 'https://docs.totalcms.co/builder/admin/'],
-			['label' => 'Frontend Assets (Vite)',        'url' => 'https://docs.totalcms.co/builder/frontend/'],
-			['label' => 'Builder CLI Commands',          'url' => 'https://docs.totalcms.co/builder/cli/'],
-			['label' => 'Starter Templates',             'url' => 'https://docs.totalcms.co/builder/starters/'],
-			['label' => 'Builder Twig Reference',        'url' => 'https://docs.totalcms.co/twig/builder/'],
+			['label' => 'Site Builder Overview',         'url' => 'https://docs.totalcms.co/site-builder/overview/'],
+			['label' => 'Page Features (Middleware)',    'url' => 'https://docs.totalcms.co/site-builder/overview/#page-features-middleware'],
+			['label' => 'Builder Admin UI',              'url' => 'https://docs.totalcms.co/site-builder/admin/'],
+			['label' => 'Frontend Assets (Vite)',        'url' => 'https://docs.totalcms.co/site-builder/frontend/'],
+			['label' => 'Builder CLI Commands',          'url' => 'https://docs.totalcms.co/site-builder/cli/'],
+			['label' => 'Starter Templates',             'url' => 'https://docs.totalcms.co/site-builder/starters/'],
+			['label' => 'Builder Twig Reference',        'url' => 'https://docs.totalcms.co/site-builder/twig/'],
 			['label' => 'Bundled Extensions',            'url' => 'https://docs.totalcms.co/extensions/bundled/'],
 		],
-		'url' => 'https://docs.totalcms.co/builder/overview/',
+		'url' => 'https://docs.totalcms.co/site-builder/overview/',
 	];
 }
 

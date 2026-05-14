@@ -640,7 +640,7 @@ class DocsTools
 		return json_encode([
 			'error' => "No Site Builder match for '{$query}'.",
 			'hint'  => 'Try a category — "overview", "schema", "templates", "twig", "assets", "starters", "cli", "routes", or "features" — or a specific name like "cms.builder.nav", "route", "blog", "auth", "ab-split", or "geo-redirect".',
-			'url'   => $api['url'] ?? 'https://docs.totalcms.co/builder/overview/',
+			'url'   => $api['url'] ?? 'https://docs.totalcms.co/site-builder/overview/',
 		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT);
 	}
 }
