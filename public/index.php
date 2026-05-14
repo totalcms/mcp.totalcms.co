@@ -23,9 +23,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && str_starts_with($_SERVER['REQUEST_UR
 	exit;
 }
 
-// Redirect browsers to the docs
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && !str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
-	header('Location: https://docs.totalcms.co/advanced/ai-integration/', true, 302);
+// Redirect browsers to the docs — but let MCP clients through.
+// MCP's Streamable HTTP transport opens its SSE stream with GET + Accept: text/event-stream,
+// so we only redirect when the Accept header looks like a plain browser visit.
+$accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+$isMcpRequest = str_contains($accept, 'application/json') || str_contains($accept, 'text/event-stream');
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && !$isMcpRequest) {
+	header('Location: https://docs.totalcms.co/extensions/ai-integration/', true, 302);
 	exit;
 }
 
