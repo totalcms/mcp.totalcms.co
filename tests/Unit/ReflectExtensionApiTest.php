@@ -301,7 +301,7 @@ it('reflectBundledExtensions reads each extension.json under resources/extension
 	expect($bundled[0])->toMatchArray([
 		'id'   => 'totalcms/ab-split',
 		'name' => 'A/B Split',
-		'url'  => 'https://docs.totalcms.co/extensions/bundled/ab-split/',
+		'url'  => 'https://docs.totalcms.co/extensions/ab-split/',
 	]);
 
 	// cleanup

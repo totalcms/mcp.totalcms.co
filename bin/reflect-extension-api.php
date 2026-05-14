@@ -431,7 +431,7 @@ function reflectBundledExtensions(string $totalcmsPath): array
 			'name'        => (string) ($decoded['name'] ?? $shortName),
 			'description' => (string) ($decoded['description'] ?? ''),
 			'version'     => (string) ($decoded['version'] ?? ''),
-			'url'         => 'https://docs.totalcms.co/extensions/bundled/' . $shortName . '/',
+			'url'         => 'https://docs.totalcms.co/extensions/' . $shortName . '/',
 		];
 	}
 

@@ -39,131 +39,33 @@ echo "Building MCP documentation index...\n";
 echo "Source: {$docsDir}\n\n";
 
 // -------------------------------------------------------
-// Collect all markdown files
+// Parse the docs-only portion of the index (no PHP-source reflection).
+// This is the same function the hermetic fixture test exercises, so the
+// build pipeline and tests stay in lockstep.
 // -------------------------------------------------------
-$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($docsDir));
-$files = [];
-foreach ($iterator as $file) {
-	if ($file->isFile() && $file->getExtension() === 'md') {
-		$relativePath = str_replace($docsDir . '/', '', $file->getPathname());
-		// Skip internal docs
-		if (str_starts_with($relativePath, 'internal/')) {
-			continue;
-		}
-		$files[$relativePath] = $file->getPathname();
-	}
-}
+$docsIndex = assembleDocsOnlyIndex($docsDir);
 
-echo "Found " . count($files) . " documentation files.\n";
+echo "Found " . count($docsIndex['pages']) . " documentation files.\n";
+echo "  Pages indexed: " . count($docsIndex['pages']) . "\n";
+echo "  Twig filters: " . count($docsIndex['twig_filters']) . "\n";
 
 // -------------------------------------------------------
-// Parse all pages for full-text search
-// -------------------------------------------------------
-$pages = [];
-foreach ($files as $relativePath => $fullPath) {
-	$content = file_get_contents($fullPath);
-	$frontmatter = parseFrontmatter($content);
-	$body = removeFrontmatter($content);
-	$path = str_replace('.md', '', $relativePath);
-
-	// Extract sections (H2 headings)
-	$sections = [];
-	if (preg_match_all('/^##\s+(.+)$/m', $body, $matches)) {
-		$sections = $matches[1];
-	}
-
-	// Clean content for searching
-	$searchContent = cleanForSearch($body);
-
-	$page = [
-		'title'    => $frontmatter['title'] ?? extractH1($body) ?? basename($path),
-		'path'     => $path,
-		'url'      => 'https://docs.totalcms.co/' . str_replace('.md', '/', $relativePath),
-		'sections' => $sections,
-		'content'  => $searchContent,
-	];
-
-	if (isset($frontmatter['since'])) {
-		$page['since'] = $frontmatter['since'];
-	}
-
-	$pages[] = $page;
-}
-
-echo "  Pages indexed: " . count($pages) . "\n";
-
-// -------------------------------------------------------
-// Parse Twig filters from filters.md
-// -------------------------------------------------------
-$twigFilters = [];
-$filtersFile = $docsDir . '/twig/filters.md';
-if (file_exists($filtersFile)) {
-	$content = file_get_contents($filtersFile);
-	$twigFilters = parseFilterSignatures($content);
-}
-echo "  Twig filters: " . count($twigFilters) . "\n";
-
-// -------------------------------------------------------
-// Parse Twig functions from multiple files
+// Layer reflected cms.* functions on top of the documented namespace functions
+// from the docs pass. Reflection is the canonical existence source; docs supply
+// example snippets where written.
 // -------------------------------------------------------
 require_once __DIR__ . '/reflect-twig-functions.php';
 
-$twigFunctions = [];
-
-// functions.md has standalone (non-cms.*) helpers.
-$functionsFile = $docsDir . '/twig/functions.md';
-if (file_exists($functionsFile)) {
-	$content = file_get_contents($functionsFile);
-	$twigFunctions = array_merge($twigFunctions, parseFunctionSignatures($content));
-}
-
-// cms.* namespace functions: reflection over the TotalCMSTwigAdapter and
-// each sub-adapter is the canonical existence source. Docs files supply
-// example snippets where written. Doc-only entries are flagged as stale.
-$documentedNamespaceFns = [];
-$twigNamespaceFiles = [
-	'twig/collections.md',
-	'twig/data.md',
-	'twig/media.md',
-	'twig/imageworks.md',
-	'twig/variables.md',
-	'twig/totalcms.md',
-	'twig/render.md',
-	'twig/views.md',
-	'twig/locale.md',
-	'twig/localization.md',
-	'twig/load-more.md',
-	'twig/utils.md',
-	// Namespace docs that moved out of twig/ during the docs reorg
-	'auth/twig.md',
-	'admin/twig.md',
-	'schemas/twig.md',
-	'site-builder/twig.md',
-	// Forms group is now top-level
-	'forms/overview.md',
-	'forms/builder.md',
-	'forms/deck.md',
-	'forms/fields.md',
-	'forms/options.md',
-	'forms/patterns.md',
-	'forms/report.md',
-	'forms/specialized.md',
-];
-foreach ($twigNamespaceFiles as $relPath) {
-	$filePath = $docsDir . '/' . $relPath;
-	if (file_exists($filePath)) {
-		$content = file_get_contents($filePath);
-		$documentedNamespaceFns = array_merge($documentedNamespaceFns, parseNamespaceFunctions($content, $relPath));
-	}
-}
-
 $reflectedNamespaceFns = reflectCmsTwigFunctions($totalcmsPath);
-[$mergedNamespaceFns, $staleDocs] = mergeTwigFunctions($reflectedNamespaceFns, $documentedNamespaceFns);
-$twigFunctions = array_merge($twigFunctions, $mergedNamespaceFns);
+[$mergedNamespaceFns, $staleDocs] = mergeTwigFunctions(
+	$reflectedNamespaceFns,
+	$docsIndex['documented_namespace_functions'],
+);
+$twigFunctions = array_merge($docsIndex['twig_functions'], $mergedNamespaceFns);
 
 echo "  Twig functions: " . count($twigFunctions)
 	. " (cms.*: " . count($reflectedNamespaceFns) . " reflected, "
-	. count($documentedNamespaceFns) . " documented";
+	. count($docsIndex['documented_namespace_functions']) . " documented";
 if ($staleDocs !== []) {
 	echo ", " . count($staleDocs) . " doc-only — possibly stale";
 }
@@ -174,117 +76,13 @@ if ($staleDocs !== [] && count($staleDocs) <= 10) {
 	}
 }
 
-// -------------------------------------------------------
-// Parse field types from fields/ docs.
-// Skip files ending in -options.md — those are Field Options (static, relational,
-// sorting, etc.) which describe option sources for select-type fields, not field
-// types themselves.
-// -------------------------------------------------------
-$fieldTypes = [];
-$fieldsDir = $docsDir . '/fields';
-if (is_dir($fieldsDir)) {
-	$propFiles = glob($fieldsDir . '/*.md');
-	foreach ($propFiles as $propFile) {
-		$baseName = basename($propFile);
-		if (str_ends_with($baseName, '-options.md')) {
-			continue;
-		}
-		$content = file_get_contents($propFile);
-		$frontmatter = parseFrontmatter($content);
-		$body = removeFrontmatter($content);
-		$fieldTypes[] = [
-			'name'        => str_replace('.md', '', $baseName),
-			'title'       => $frontmatter['title'] ?? basename($propFile, '.md'),
-			'description' => $frontmatter['description'] ?? '',
-			'content'     => cleanForSearch($body),
-			'url'         => 'https://docs.totalcms.co/fields/' . str_replace('.md', '/', $baseName),
-		];
-	}
-}
-
-// Also parse schema types from schemas directory
-$schemasDir = $docsDir . '/schemas';
-if (is_dir($schemasDir)) {
-	$schemaFiles = glob($schemasDir . '/*.md');
-	foreach ($schemaFiles as $schemaFile) {
-		$content = file_get_contents($schemaFile);
-		$frontmatter = parseFrontmatter($content);
-		$body = removeFrontmatter($content);
-		$fieldTypes[] = [
-			'name'        => str_replace('.md', '', basename($schemaFile)),
-			'title'       => $frontmatter['title'] ?? basename($schemaFile, '.md'),
-			'description' => $frontmatter['description'] ?? '',
-			'content'     => cleanForSearch($body),
-			'url'         => 'https://docs.totalcms.co/schemas/' . str_replace('.md', '/', basename($schemaFile)),
-		];
-	}
-}
-echo "  Field types: " . count($fieldTypes) . "\n";
+echo "  Field types: " . count($docsIndex['field_types']) . "\n";
+echo "  API endpoints: " . count($docsIndex['api_endpoints']) . "\n";
+echo "  Schema config options: " . count($docsIndex['schema_config']) . "\n";
+echo "  CLI commands: " . count($docsIndex['cli_commands']) . "\n";
 
 // -------------------------------------------------------
-// Parse REST API endpoints from rest-api.md
-// -------------------------------------------------------
-$apiEndpoints = [];
-$apiFile = $docsDir . '/apis/rest-api.md';
-if (file_exists($apiFile)) {
-	$content = file_get_contents($apiFile);
-	$apiEndpoints = parseApiEndpoints($content);
-}
-
-// Also check index-filter.md for additional API docs
-$indexFilterFile = $docsDir . '/apis/index-filter.md';
-if (file_exists($indexFilterFile)) {
-	$content = file_get_contents($indexFilterFile);
-	$apiEndpoints = array_merge($apiEndpoints, parseApiEndpoints($content));
-}
-echo "  API endpoints: " . count($apiEndpoints) . "\n";
-
-// -------------------------------------------------------
-// Parse schema/collection config options
-// -------------------------------------------------------
-$schemaConfig = [];
-$settingsFile = $docsDir . '/collections/settings.md';
-if (file_exists($settingsFile)) {
-	$content = file_get_contents($settingsFile);
-	$schemaConfig = parseSchemaConfig($content);
-}
-
-// Also parse schema-level settings from schemas/reference.md
-$schemaRefFile = $docsDir . '/schemas/reference.md';
-if (file_exists($schemaRefFile)) {
-	$content = file_get_contents($schemaRefFile);
-	$schemaRefConfigs = parseSchemaConfig($content);
-	// Override URL to point to the schema reference page
-	foreach ($schemaRefConfigs as &$cfg) {
-		$cfg['url'] = 'https://docs.totalcms.co/schemas/reference/';
-	}
-	unset($cfg);
-	$schemaConfig = array_merge($schemaConfig, $schemaRefConfigs);
-}
-echo "  Schema config options: " . count($schemaConfig) . "\n";
-
-// -------------------------------------------------------
-// Parse CLI commands from cli/commands.md
-// -------------------------------------------------------
-$cliCommands = [];
-$cliSourceFiles = [
-	'extensions/cli.md',
-	'site-builder/cli.md',
-];
-foreach ($cliSourceFiles as $relPath) {
-	$filePath = $docsDir . '/' . $relPath;
-	if (!file_exists($filePath)) {
-		continue;
-	}
-	$content    = file_get_contents($filePath);
-	$pageUrl    = 'https://docs.totalcms.co/' . str_replace('.md', '/', $relPath);
-	$parsedCmds = parseCliCommands($content, $pageUrl);
-	$cliCommands = array_merge($cliCommands, $parsedCmds);
-}
-echo "  CLI commands: " . count($cliCommands) . "\n";
-
-// -------------------------------------------------------
-// Build the final index
+// Build the final index — docs pass + reflection-driven extension/builder API
 // -------------------------------------------------------
 $extensionApi = buildExtensionApiReference($totalcmsPath);
 $builderApi   = buildBuilderApiReference();
@@ -292,13 +90,13 @@ $builderApi   = buildBuilderApiReference();
 $index = [
 	'version'        => '1.0.0',
 	'built_at'       => date('c'),
-	'pages'          => $pages,
+	'pages'          => $docsIndex['pages'],
 	'twig_functions' => $twigFunctions,
-	'twig_filters'   => $twigFilters,
-	'field_types'    => $fieldTypes,
-	'api_endpoints'  => $apiEndpoints,
-	'schema_config'  => $schemaConfig,
-	'cli_commands'   => $cliCommands,
+	'twig_filters'   => $docsIndex['twig_filters'],
+	'field_types'    => $docsIndex['field_types'],
+	'api_endpoints'  => $docsIndex['api_endpoints'],
+	'schema_config'  => $docsIndex['schema_config'],
+	'cli_commands'   => $docsIndex['cli_commands'],
 	'extension_api'  => $extensionApi,
 	'builder_api'    => $builderApi,
 ];
@@ -314,6 +112,21 @@ if ($failures !== []) {
 	}
 	fwrite(STDERR, "\nThe index was NOT written. Likely cause: built against a T3 source tree that\n");
 	fwrite(STDERR, "predates the missing sections, or a parser is silently dropping content.\n");
+	exit(1);
+}
+
+// Also refuse to write an index with stale URL prefixes — catches hardcoded
+// docs.totalcms.co URLs that point at old paths (pre-reorg /builder/, /api/,
+// /advanced/, /property-settings/, etc.). See ALLOWED_DOCS_URL_PREFIXES in
+// index-parsers.php.
+$urlFailures = validateIndexUrls($index);
+if ($urlFailures !== []) {
+	fwrite(STDERR, "\nError: index contains URLs with stale top-level prefixes:\n");
+	foreach ($urlFailures as $msg) {
+		fwrite(STDERR, "  - {$msg}\n");
+	}
+	fwrite(STDERR, "\nThe index was NOT written. Update the hardcoded URL in the offending parser\n");
+	fwrite(STDERR, "to use a current top-level docs folder.\n");
 	exit(1);
 }
 

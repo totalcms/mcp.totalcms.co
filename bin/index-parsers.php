@@ -731,8 +731,8 @@ function buildBuilderApiReference(): array
 				],
 			],
 			'bundled_features' => [
-				['name' => 'ab-split',     'extension' => 'totalcms/ab-split',     'since' => '3.5.0', 'description' => 'Render an alternate template for a percentage of visitors. Sticky via 30-day cookie. Configure via page.data.abTemplate and page.data.abPercent.', 'url' => 'https://docs.totalcms.co/extensions/bundled/ab-split/'],
-				['name' => 'geo-redirect', 'extension' => 'totalcms/geo-redirect', 'since' => '3.5.0', 'description' => '302 visitors based on country detected from CDN-injected headers (Cloudflare, Vercel, generic). Configure via page.data.geoRedirects.', 'url' => 'https://docs.totalcms.co/extensions/bundled/geo-redirect/'],
+				['name' => 'ab-split',     'extension' => 'totalcms/ab-split',     'since' => '3.5.0', 'description' => 'Render an alternate template for a percentage of visitors. Sticky via 30-day cookie. Configure via page.data.abTemplate and page.data.abPercent.', 'url' => 'https://docs.totalcms.co/extensions/ab-split/'],
+				['name' => 'geo-redirect', 'extension' => 'totalcms/geo-redirect', 'since' => '3.5.0', 'description' => '302 visitors based on country detected from CDN-injected headers (Cloudflare, Vercel, generic). Configure via page.data.geoRedirects.', 'url' => 'https://docs.totalcms.co/extensions/geo-redirect/'],
 			],
 			'registering_from_extension' => [
 				'method'          => '$context->addPageMiddleware(string $name, string $middlewareClass): void',
@@ -803,4 +803,286 @@ function validateIndexCounts(array $index, ?array $minimums = null): array
 	}
 
 	return $failures;
+}
+
+/**
+ * Top-level docs.totalcms.co URL prefixes that map to real folders in
+ * resources/docs/. Any other prefix in the built index indicates a stale path
+ * from before the May 2026 docs reorganization (or a typo).
+ *
+ * Keep this list in lockstep with the top-level folders in totalcms/resources/docs/.
+ */
+const ALLOWED_DOCS_URL_PREFIXES = [
+	'admin', 'apis', 'auth', 'collections', 'extensions', 'fields', 'forms',
+	'get-started', 'notifications', 'operations', 'schemas', 'site-builder', 'twig',
+];
+
+/**
+ * Recursively scan the built index for `url` fields and return any that look
+ * stale. Two checks run:
+ *
+ *   1. Top-level prefix must be in ALLOWED_DOCS_URL_PREFIXES (always runs).
+ *      Catches folder renames like `/builder/` → `/site-builder/`.
+ *   2. Full slug must appear in `$index['pages'][].url` (if pages exist).
+ *      Catches file moves like `/twig/builder/` → `/site-builder/twig/`
+ *      where the prefix happens to still be valid.
+ *
+ * Each failure is reported as "<key.path>: <bad-url>".
+ *
+ * @param array<string, mixed> $index
+ * @return string[]
+ */
+function validateIndexUrls(array $index): array
+{
+	$failures = [];
+	$allowed = array_flip(ALLOWED_DOCS_URL_PREFIXES);
+
+	// Build the set of valid page URLs (canonical form: no fragment, trailing /).
+	$validPageUrls = [];
+	if (isset($index['pages']) && is_array($index['pages'])) {
+		foreach ($index['pages'] as $page) {
+			if (is_array($page) && isset($page['url']) && is_string($page['url'])) {
+				$validPageUrls[normalizeDocsUrl($page['url'])] = true;
+			}
+		}
+	}
+
+	$walk = function ($node, string $path) use (&$walk, &$failures, $allowed, $validPageUrls): void {
+		if (!is_array($node)) {
+			return;
+		}
+		foreach ($node as $key => $value) {
+			$childPath = $path === '' ? (string) $key : "$path.$key";
+			if ($key === 'url' && is_string($value)) {
+				if (preg_match('#https?://docs\.totalcms\.co/([^/]+)/#', $value, $m)) {
+					if (!isset($allowed[$m[1]])) {
+						$failures[] = "$childPath: $value (stale top-level prefix)";
+						continue;
+					}
+					if ($validPageUrls !== []) {
+						$normalized = normalizeDocsUrl($value);
+						if (!isset($validPageUrls[$normalized])) {
+							$failures[] = "$childPath: $value (no matching page)";
+						}
+					}
+				}
+			} elseif (is_array($value)) {
+				$walk($value, $childPath);
+			}
+		}
+	};
+
+	$walk($index, '');
+	return $failures;
+}
+
+/**
+ * Normalize a docs.totalcms.co URL for comparison: drop fragment + query,
+ * ensure trailing slash. Returns the URL minus #anchor.
+ */
+function normalizeDocsUrl(string $url): string
+{
+	$url = preg_replace('/[#?].*$/', '', $url) ?? $url;
+	if (!str_ends_with($url, '/')) {
+		$url .= '/';
+	}
+	return $url;
+}
+
+/**
+ * Files under twig/ AND under other top-level sections that contain documented
+ * `cms.<namespace>.*` function signatures. Used by assembleDocsOnlyIndex to
+ * harvest doc-side function bodies for merging with reflection output.
+ *
+ * Keep this list in lockstep with the `$twigNamespaceFiles` block in
+ * build-index.php — the hermetic fixture test will catch divergence.
+ */
+const TWIG_NAMESPACE_DOC_FILES = [
+	'twig/collections.md', 'twig/data.md', 'twig/media.md', 'twig/imageworks.md',
+	'twig/variables.md', 'twig/totalcms.md', 'twig/render.md', 'twig/views.md',
+	'twig/locale.md', 'twig/localization.md', 'twig/load-more.md', 'twig/utils.md',
+	'auth/twig.md', 'admin/twig.md', 'schemas/twig.md', 'site-builder/twig.md',
+	'forms/overview.md', 'forms/builder.md', 'forms/deck.md', 'forms/fields.md',
+	'forms/options.md', 'forms/patterns.md', 'forms/report.md', 'forms/specialized.md',
+];
+
+/**
+ * Build the docs-only portion of the MCP index from a docs directory.
+ *
+ * Does NOT include `extension_api` or `builder_api` — those require reflecting
+ * against PHP source files in the totalcms src/ tree and are layered on top by
+ * the build-index.php script. Likewise, the `twig_functions` returned here
+ * contains only the standalone (non-namespace) helpers parsed from functions.md;
+ * caller merges with reflected cms.* functions.
+ *
+ * Pure function: takes a docs directory, returns an array. Safe to call from
+ * tests against a fixture tree.
+ *
+ * @return array{
+ *   pages: array<int, array<string, mixed>>,
+ *   twig_filters: array<int, array<string, mixed>>,
+ *   twig_functions: array<int, array<string, mixed>>,
+ *   documented_namespace_functions: array<int, array<string, mixed>>,
+ *   field_types: array<int, array<string, mixed>>,
+ *   api_endpoints: array<int, array<string, mixed>>,
+ *   schema_config: array<int, array<string, mixed>>,
+ *   cli_commands: array<int, array<string, mixed>>
+ * }
+ */
+function assembleDocsOnlyIndex(string $docsDir): array
+{
+	// Pages — walk every .md (except internal/)
+	$pages = [];
+	$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($docsDir));
+	foreach ($iterator as $file) {
+		if (!$file->isFile() || $file->getExtension() !== 'md') {
+			continue;
+		}
+		$relativePath = str_replace($docsDir . '/', '', $file->getPathname());
+		if (str_starts_with($relativePath, 'internal/')) {
+			continue;
+		}
+
+		$content = file_get_contents($file->getPathname());
+		$frontmatter = parseFrontmatter($content);
+		$body = removeFrontmatter($content);
+		$path = str_replace('.md', '', $relativePath);
+
+		$sections = [];
+		if (preg_match_all('/^##\s+(.+)$/m', $body, $matches)) {
+			$sections = $matches[1];
+		}
+
+		// The root index.md becomes / not /index/.
+		$url = $relativePath === 'index.md'
+			? 'https://docs.totalcms.co/'
+			: 'https://docs.totalcms.co/' . str_replace('.md', '/', $relativePath);
+
+		$page = [
+			'title'    => $frontmatter['title'] ?? extractH1($body) ?? basename($path),
+			'path'     => $path,
+			'url'      => $url,
+			'sections' => $sections,
+			'content'  => cleanForSearch($body),
+		];
+		if (isset($frontmatter['since'])) {
+			$page['since'] = $frontmatter['since'];
+		}
+		$pages[] = $page;
+	}
+
+	// Twig filters
+	$twigFilters = [];
+	$filtersFile = $docsDir . '/twig/filters.md';
+	if (is_file($filtersFile)) {
+		$twigFilters = parseFilterSignatures(file_get_contents($filtersFile));
+	}
+
+	// Standalone (non-cms.*) Twig functions
+	$twigFunctions = [];
+	$functionsFile = $docsDir . '/twig/functions.md';
+	if (is_file($functionsFile)) {
+		$twigFunctions = parseFunctionSignatures(file_get_contents($functionsFile));
+	}
+
+	// Documented cms.* namespace functions (caller merges with reflection)
+	$documentedNamespaceFns = [];
+	foreach (TWIG_NAMESPACE_DOC_FILES as $relPath) {
+		$filePath = $docsDir . '/' . $relPath;
+		if (is_file($filePath)) {
+			$documentedNamespaceFns = array_merge(
+				$documentedNamespaceFns,
+				parseNamespaceFunctions(file_get_contents($filePath), $relPath),
+			);
+		}
+	}
+
+	// Field types — fields/*.md excluding -options.md (those are Field Options)
+	$fieldTypes = [];
+	$fieldsDir = $docsDir . '/fields';
+	if (is_dir($fieldsDir)) {
+		foreach (glob($fieldsDir . '/*.md') as $propFile) {
+			$baseName = basename($propFile);
+			if (str_ends_with($baseName, '-options.md')) {
+				continue;
+			}
+			$content = file_get_contents($propFile);
+			$frontmatter = parseFrontmatter($content);
+			$fieldTypes[] = [
+				'name'        => str_replace('.md', '', $baseName),
+				'title'       => $frontmatter['title'] ?? basename($propFile, '.md'),
+				'description' => $frontmatter['description'] ?? '',
+				'content'     => cleanForSearch(removeFrontmatter($content)),
+				'url'         => 'https://docs.totalcms.co/fields/' . str_replace('.md', '/', $baseName),
+			];
+		}
+	}
+	// Schema types live in the same field_types bucket so docs_field_type can
+	// surface "blog", "image", "gallery", etc.
+	$schemasDir = $docsDir . '/schemas';
+	if (is_dir($schemasDir)) {
+		foreach (glob($schemasDir . '/*.md') as $schemaFile) {
+			$content = file_get_contents($schemaFile);
+			$frontmatter = parseFrontmatter($content);
+			$fieldTypes[] = [
+				'name'        => str_replace('.md', '', basename($schemaFile)),
+				'title'       => $frontmatter['title'] ?? basename($schemaFile, '.md'),
+				'description' => $frontmatter['description'] ?? '',
+				'content'     => cleanForSearch(removeFrontmatter($content)),
+				'url'         => 'https://docs.totalcms.co/schemas/' . str_replace('.md', '/', basename($schemaFile)),
+			];
+		}
+	}
+
+	// API endpoints
+	$apiEndpoints = [];
+	$apiFile = $docsDir . '/apis/rest-api.md';
+	if (is_file($apiFile)) {
+		$apiEndpoints = parseApiEndpoints(file_get_contents($apiFile));
+	}
+	$indexFilterFile = $docsDir . '/apis/index-filter.md';
+	if (is_file($indexFilterFile)) {
+		$apiEndpoints = array_merge($apiEndpoints, parseApiEndpoints(file_get_contents($indexFilterFile)));
+	}
+
+	// Schema/collection config
+	$schemaConfig = [];
+	$settingsFile = $docsDir . '/collections/settings.md';
+	if (is_file($settingsFile)) {
+		$schemaConfig = parseSchemaConfig(file_get_contents($settingsFile));
+	}
+	$schemaRefFile = $docsDir . '/schemas/reference.md';
+	if (is_file($schemaRefFile)) {
+		$schemaRefConfigs = parseSchemaConfig(file_get_contents($schemaRefFile));
+		foreach ($schemaRefConfigs as &$cfg) {
+			$cfg['url'] = 'https://docs.totalcms.co/schemas/reference/';
+		}
+		unset($cfg);
+		$schemaConfig = array_merge($schemaConfig, $schemaRefConfigs);
+	}
+
+	// CLI commands
+	$cliCommands = [];
+	foreach (['extensions/cli.md', 'site-builder/cli.md'] as $relPath) {
+		$filePath = $docsDir . '/' . $relPath;
+		if (!is_file($filePath)) {
+			continue;
+		}
+		$pageUrl = 'https://docs.totalcms.co/' . str_replace('.md', '/', $relPath);
+		$cliCommands = array_merge(
+			$cliCommands,
+			parseCliCommands(file_get_contents($filePath), $pageUrl),
+		);
+	}
+
+	return [
+		'pages'                          => $pages,
+		'twig_filters'                   => $twigFilters,
+		'twig_functions'                 => $twigFunctions,
+		'documented_namespace_functions' => $documentedNamespaceFns,
+		'field_types'                    => $fieldTypes,
+		'api_endpoints'                  => $apiEndpoints,
+		'schema_config'                  => $schemaConfig,
+		'cli_commands'                   => $cliCommands,
+	];
 }

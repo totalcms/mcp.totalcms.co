@@ -174,3 +174,104 @@ it('validateIndexCounts accepts custom thresholds for tests', function (): void 
 	expect(validateIndexCounts(['pages' => array_fill(0, 5, 'p')], ['pages' => 10]))
 		->toBe(['pages: 5 (expected >= 10)']);
 });
+
+it('validateIndexUrls passes when every URL matches a known page', function (): void {
+	$index = [
+		'pages' => [
+			['url' => 'https://docs.totalcms.co/get-started/welcome/'],
+			['url' => 'https://docs.totalcms.co/apis/rest-api/'],
+			['url' => 'https://docs.totalcms.co/site-builder/overview/'],
+			['url' => 'https://docs.totalcms.co/fields/styled-text/'],
+		],
+		'field_types' => [
+			['url' => 'https://docs.totalcms.co/fields/styled-text/'],
+		],
+	];
+
+	expect(validateIndexUrls($index))->toBe([]);
+});
+
+it('validateIndexUrls flags every stale top-level URL prefix', function (): void {
+	$index = [
+		'pages' => [
+			['url' => 'https://docs.totalcms.co/builder/overview/'],        // → site-builder
+			['url' => 'https://docs.totalcms.co/api/rest-api/'],            // → apis
+			['url' => 'https://docs.totalcms.co/advanced/cli/'],            // → extensions or operations
+			['url' => 'https://docs.totalcms.co/property-settings/card/'],  // → fields
+			['url' => 'https://docs.totalcms.co/get-started/welcome/'],     // OK, should not appear
+		],
+	];
+
+	$failures = validateIndexUrls($index);
+
+	expect($failures)->toHaveCount(4);
+	expect(implode("\n", $failures))->toContain('builder/overview');
+	expect(implode("\n", $failures))->toContain('api/rest-api');
+	expect(implode("\n", $failures))->toContain('advanced/cli');
+	expect(implode("\n", $failures))->toContain('property-settings/card');
+});
+
+it('validateIndexUrls walks nested structures and ignores non-docs URLs', function (): void {
+	$index = [
+		'builder_api' => [
+			'docs' => [
+				['url' => 'https://docs.totalcms.co/site-builder/overview/'],
+				['url' => 'https://github.com/totalcms/cms'], // external, ignored
+			],
+		],
+		'extension_api' => [
+			'methods' => [
+				['name' => 'foo', 'url' => 'https://docs.totalcms.co/extensions/overview/'],
+			],
+		],
+	];
+
+	expect(validateIndexUrls($index))->toBe([]);
+});
+
+it('validateIndexUrls catches a stale URL nested inside builder_api.docs[] via full-slug check', function (): void {
+	// twig/builder has a valid top-level prefix (`twig`) — only a full-slug check
+	// against the page set can flag it.
+	$index = [
+		'pages' => [
+			['url' => 'https://docs.totalcms.co/twig/overview/'],
+			['url' => 'https://docs.totalcms.co/site-builder/twig/'],
+		],
+		'builder_api' => [
+			'docs' => [
+				['label' => 'Builder Twig', 'url' => 'https://docs.totalcms.co/twig/builder/'],
+			],
+		],
+	];
+
+	$failures = validateIndexUrls($index);
+	expect($failures)->toHaveCount(1);
+	expect($failures[0])->toContain('twig/builder');
+	expect($failures[0])->toContain('no matching page');
+});
+
+it('validateIndexUrls treats #anchor fragments as the same page', function (): void {
+	$index = [
+		'pages' => [
+			['url' => 'https://docs.totalcms.co/site-builder/overview/'],
+		],
+		'builder_api' => [
+			'docs' => [
+				['url' => 'https://docs.totalcms.co/site-builder/overview/#page-middleware'],
+			],
+		],
+	];
+
+	expect(validateIndexUrls($index))->toBe([]);
+});
+
+it('validates the current data/index.json against the URL allow-list', function (): void {
+	$indexPath = __DIR__ . '/../../data/index.json';
+	if (!is_file($indexPath)) {
+		test()->markTestSkipped('data/index.json not built — run bin/build-index.php first');
+	}
+
+	$index = json_decode(file_get_contents($indexPath), true, 512, JSON_THROW_ON_ERROR);
+
+	expect(validateIndexUrls($index))->toBe([]);
+});
